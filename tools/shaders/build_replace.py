@@ -32,6 +32,9 @@ SHADERS = [
     ('fern.ps.hlsl', 'ps_5_1', [], '165EDCD2CB963868'),             # ferns and bushes
     ('tonemap.ps.hlsl', 'ps_5_1', [], '37B186F4BD3288F7'),          # final composite: bloom + tone curve
     ('terrain.ps.hlsl', 'ps_5_1', [], '9C2144E42E95A76F'),          # ground + cliff rock blend
+    ('grass.ps.hlsl', 'ps_5_1', [], '2F8A0341E8C09698'),            # near ground (grass, forest floor)
+    ('ground.ps.hlsl', 'ps_5_1', [], '7DDAD5C29B3F56EE'),           # far lightmapped terrain
+    ('splat.ps.hlsl', 'ps_5_1', [], '4755A2E4A05BA678'),            # dirt / path splats over the ground
 ]
 
 

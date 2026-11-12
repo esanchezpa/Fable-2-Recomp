@@ -27,6 +27,19 @@
 //   either side, following the mip level), as in lit.ps.hlsl: pebbles, ruts
 //   and grass clumps catch the sun instead of reading as paint.
 // FOG: distance fog strength (1 = original).
+// SMOOTH_LIGHT: the baked light map (tf3) read with a 16-tap cubic B-spline
+//   on its texel grid; as the game reads it, each texel shows as a square
+//   of light and colour on the ground (ground.ps.hlsl has the same).
+#ifndef SMOOTH_LIGHT
+#define SMOOTH_LIGHT 1
+#endif
+// SMOOTH_COLOR: where the ground colour map (tf0) is magnified (one texel
+//   covers more than a pixel), read it with the same cubic B-spline at texel
+//   centres. The game samples it point-filtered, so close up each texel is
+//   a hard square of colour.
+#ifndef SMOOTH_COLOR
+#define SMOOTH_COLOR 1
+#endif
 #ifndef ALBEDO_BUMP
 #define ALBEDO_BUMP 5.0
 #endif
@@ -38,6 +51,7 @@
 #define XE_FLOAT_CONSTANTS 17
 #define XE_DESCRIPTOR_INDICES 7
 #include "xe_common.hlsli"
+#include "modern_common.hlsli"
 
 #define C0 K[0]
 #define C11 K[1]
@@ -80,6 +94,11 @@ struct PSInput10 {
 #define TF14(uv) Fetch(14, 3, uv, false)
 #define TF8(uv) Fetch(8, 4, uv, false)
 #define TF3(uv) Fetch(3, 5, uv, false)
+#define TF3_TEXEL(uv) FetchLevel(3, 5, uv, false, 0.0)
+
+
+
+
 #define TF4(x) Fetch(4, 6, float2(x, 0.0), true)
 #define TF5(x) Fetch(5, 7, float2(x, 0.0), true)
 
@@ -90,7 +109,16 @@ float4 main(PSInput10 input) : SV_Target0 {
   r10.xy = GuestPixelPosition(input.position, input.front_face);
   float2 ground_uv = r2.xy;
 
-  r11.xyz = TF0(r2.xy).xyz;                                              // 10
+  r11.xyz = TF0(r2.xy).xyz;
+  float magnify = 0.0;
+  if (SMOOTH_COLOR) {
+    // Texels per pixel of the guest-size map; below 1 it is magnified.
+    float2 tex = TextureSize(0);
+    float2 fx = ddx(ground_uv) * tex, fy = ddy(ground_uv) * tex;
+    float footprint = sqrt(max(dot(fx, fx), dot(fy, fy)));
+    magnify = saturate((1.0 - footprint) * 2.0);
+    if (magnify > 0.0) r11.xyz = lerp(r11.xyz, SmoothFetch(0, 0, ground_uv).xyz, magnify);
+  }                                              // 10
   float2 relief = 0.0;
   if (ALBEDO_BUMP != 0.0) {
     // The fetched colour is still gamma (it is squared at 17).
@@ -141,7 +169,7 @@ float4 main(PSInput10 input) : SV_Target0 {
   }
   r9.xy = abs(r10.xy) * C0.zw + C0.xy;                                   // 43
   r0.w = TF8(r9.xy).x;                                                   // 44
-  r9.xyz = TF3(r5.xy).xyz;                                               // 45
+  r9.xyz = (SMOOTH_LIGHT ? SmoothFetch(3, 5, r5.xy) : TF3(r5.xy)).xyz;                                               // 45
   { float s = log2(abs(r9.x)); r1.yzw = -r4.xyz + C19.xyz; r0.x = s; }   // 46
   { float s = log2(abs(r9.y)); r9.x = dot(r8.zxy, r8.zxy); r0.y = s; }   // 47
   { float s = log2(abs(r9.z)); r4.xyz = r2.x * r7.xzy; r0.z = s; }       // 48
@@ -182,7 +210,9 @@ float4 main(PSInput10 input) : SV_Target0 {
   r9.x = saturate(r9.z * C31.x + C31.y);                                 // 80
   r9.x = C255.z - r9.x;                                                  // 81
   float4 o = float4(r0.xyz * C20.w, r9.x * r9.w);                        // 82-83
-#if DEBUG_VIEW == 1
+#if DEBUG_VIEW == 2
+  o.xyz = float3(magnify, 0.0, 0.0);
+#elif DEBUG_VIEW == 1
   o.xyz = float3(saturate(relief * 4.0 + 0.5), p0 ? 0.0 : 1.0);
 #endif
   return o * xe_color_exp_bias.x;
