@@ -69,6 +69,20 @@
 #ifndef STRETCH_FULL
 #define STRETCH_FULL 32.0   // ... and where it is fully on
 #endif
+// Relief from the albedo: the brightness slope of the albedo texture (one
+// texel either side, so it follows the mip level and stays steady at a
+// distance) bends the normal, dark crevices reading as low. Most of the
+// game's surfaces have faint or no normal maps; this gives stone, wood,
+// plaster and cloth real light and shade. Off on skin. 0 = original.
+#ifndef ALBEDO_BUMP
+#define ALBEDO_BUMP 5.0
+#endif
+// Distance fog strength (1 = original). The fog washes texture and shape
+// out of everything past the middle distance.
+#ifndef FOG
+#define FOG 0.6
+#endif
+
 #ifndef STRETCH_TEXELS
 #define STRETCH_TEXELS 1024.0  // assumed albedo size (the pack's are 1024-2048)
 #endif
@@ -103,6 +117,7 @@
 // Texture bindings of this shader, in the translator's order.
 #define TF2(uv) Fetch(2, 0, uv, false)
 #define TF0(uv) Fetch(0, 1, uv, false)
+#define TF0_OFF(uv, ox, oy) FetchOffset(0, 1, uv, int2(ox, oy))
 #define TF1(uv) Fetch(1, 2, uv, false)
 #define TF8(uv) Fetch(8, 3, uv, false)
 #define TF13(uv) Fetch(13, 4, uv, false)
@@ -188,12 +203,28 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   float2 wear_slope = 0.0;
   float wear = wear_mask > 0.0 ? StoneWear(r2.xyz, normalize(r4.xyz), normalize(r3.xyz), wear_slope) : 1.0;
   r8.yzw *= lerp(1.0, wear, wear_mask);
+  float2 relief = 0.0;
+  if (ALBEDO_BUMP != 0.0) {
+    // Perceptual brightness of the neighbouring texels (the fetch is linear).
+    float3 lw = float3(0.299, 0.587, 0.114);
+    float he = sqrt(max(dot(TF0_OFF(albedo_uv, 1, 0).xyz, lw), 0.0));
+    float hw = sqrt(max(dot(TF0_OFF(albedo_uv, -1, 0).xyz, lw), 0.0));
+    float hn = sqrt(max(dot(TF0_OFF(albedo_uv, 0, 1).xyz, lw), 0.0));
+    float hs = sqrt(max(dot(TF0_OFF(albedo_uv, 0, -1).xyz, lw), 0.0));
+    float not_skin = (xe_flags & 0x80000000u) ? 1.0 - SkinWeight(albedo) : 1.0;
+    relief = float2(he - hw, hn - hs) * (0.5 * ALBEDO_BUMP * not_skin * (1.0 - wear_mask));
+  }
   r10.xyz = TF1(r0.wz).xyz;                                              // 15
   r1.w = dot(r1.xyz, r1.xyz);                                            // 16
   r9.xyz = C19.zyx - r2.zyx;                                             // 17
   { float3 v = r8.wzy * r8.wzy; r8.y = r10.x * r10.x; r11.xyz = v; }     // 18
   { float v = dot(r9.xyz, r9.xyz); r8.z = r10.y * r10.y; r0.z = v; }     // 19
   r2.xw = r12.yx * C254.xx + C254.zz;                                    // 20
+  if (ALBEDO_BUMP != 0.0) {
+    float2 n = float2(r2.x, r2.w) - relief;
+    n *= rsqrt(max(1.0, dot(n, n) * 1.2));
+    r2.x = n.x; r2.w = n.y;
+  }
   if (wear_mask > 0.0) {  // Modern: the stone relief bends the normal
     float2 n = float2(r2.x, r2.w) - wear_slope * (BUMP * wear_mask);
     n *= rsqrt(max(1.0, dot(n, n) * 1.2));  // keep room for the z component
@@ -289,7 +320,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     r2.xyz = r2.xyz * C28.y;                                             // 80
     r0.xyz = r2.xyz * r0.zyx - r6.yzw;                                   // 81
     r0.xyz = r6.yzw * r1.xyz + r0.xyz;                                   // 82
-    r6.yzw = r0.xyz * C28.x + r6.yzw;                                    // 83
+    r6.yzw = r0.xyz * (C28.x * FOG) + r6.yzw;                                    // 83
   }
   r0.xyz = C20.w * C26.xyz;                                              // 84
   float4 o = float4(r0.xyz * r6.yzw, C26.w * r8.x);                      // 85

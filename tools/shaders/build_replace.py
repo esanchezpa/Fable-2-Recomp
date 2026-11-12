@@ -31,6 +31,7 @@ SHADERS = [
     ('trunk.ps.hlsl', 'ps_5_1', [], '00E09D1BC5295D52'),            # tree trunks, second foliage layer
     ('fern.ps.hlsl', 'ps_5_1', [], '165EDCD2CB963868'),             # ferns and bushes
     ('tonemap.ps.hlsl', 'ps_5_1', [], '37B186F4BD3288F7'),          # final composite: bloom + tone curve
+    ('terrain.ps.hlsl', 'ps_5_1', [], '9C2144E42E95A76F'),          # ground + cliff rock blend
 ]
 
 

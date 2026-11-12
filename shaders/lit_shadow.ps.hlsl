@@ -37,6 +37,14 @@
 #ifndef STRETCH_FULL
 #define STRETCH_FULL 32.0   // ... and where it is fully on
 #endif
+// Relief from the albedo and distance fog strength: as in lit.ps.hlsl.
+#ifndef ALBEDO_BUMP
+#define ALBEDO_BUMP 5.0
+#endif
+#ifndef FOG
+#define FOG 0.6
+#endif
+
 #ifndef STRETCH_TEXELS
 #define STRETCH_TEXELS 1024.0  // assumed albedo size (the pack's are 1024-2048)
 #endif
@@ -85,6 +93,7 @@
 // Texture bindings of this shader, in the translator's order.
 #define TF2(uv) Fetch(2, 0, uv, false)
 #define TF0(uv) Fetch(0, 1, uv, false)
+#define TF0_OFF(uv, ox, oy) FetchOffset(0, 1, uv, int2(ox, oy))
 #define TF1(uv) Fetch(1, 2, uv, false)
 #define TF8(uv) Fetch(8, 3, uv, false)
 #define TF9(uv, o) FetchOffset(9, 4, uv, o)
@@ -160,12 +169,26 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   float2 wear_slope = 0.0;
   float wear = wear_mask > 0.0 ? StoneWear(r2.xyz, normalize(r4.xyz), normalize(r3.xyz), wear_slope) : 1.0;
   r8.yzw *= lerp(1.0, wear, wear_mask);
+  float2 relief = 0.0;
+  if (ALBEDO_BUMP != 0.0) {
+    float3 lw = float3(0.299, 0.587, 0.114);
+    float he = sqrt(max(dot(TF0_OFF(albedo_uv, 1, 0).xyz, lw), 0.0));
+    float hw = sqrt(max(dot(TF0_OFF(albedo_uv, -1, 0).xyz, lw), 0.0));
+    float hn = sqrt(max(dot(TF0_OFF(albedo_uv, 0, 1).xyz, lw), 0.0));
+    float hs = sqrt(max(dot(TF0_OFF(albedo_uv, 0, -1).xyz, lw), 0.0));
+    relief = float2(he - hw, hn - hs) * (0.5 * ALBEDO_BUMP * (1.0 - wear_mask));
+  }
   r11.xyz = TF1(r0.wz).xyz;                                              // 19
   r1.w = dot(r1.xyz, r1.xyz);                                            // 20
   r10.xyz = C19.zyx - r2.zyx;                                            // 21
   { float3 v = r8.yzw * r8.yzw; r11.x = r11.x * r11.x; r8.yzw = v; }     // 22
   { float v = dot(r10.xyz, r10.xyz); r11.y = r11.y * r11.y; r0.z = v; }  // 23
   { float2 v = r9.yx * C255.xx + C254.zz; r9.x = v.x; r9.w = v.y; }      // 24
+  if (ALBEDO_BUMP != 0.0) {
+    float2 n = float2(r9.x, r9.w) - relief;
+    n *= rsqrt(max(1.0, dot(n, n) * 1.2));
+    r9.x = n.x; r9.w = n.y;
+  }
   if (wear_mask > 0.0) {  // Modern: the stone relief bends the normal
     float2 n = float2(r9.x, r9.w) - wear_slope * (BUMP * wear_mask);
     n *= rsqrt(max(1.0, dot(n, n) * 1.2));  // keep room for the z component
@@ -290,7 +313,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     r2.xyz = r2.xyz * C28.y;                                             // 130
     r0.xyz = r2.xyz * r0.zyx - r6.yzw;                                   // 131
     r0.xyz = r6.yzw * r1.xyz + r0.xyz;                                   // 132
-    r6.yzw = r0.xyz * C28.x + r6.yzw;                                    // 133
+    r6.yzw = r0.xyz * (C28.x * FOG) + r6.yzw;                                    // 133
   }
   r0.xyz = C20.w * C26.xyz;                                              // 134
   float4 o = float4(r0.xyz * r6.yzw, C26.w * r8.x);                      // 135
