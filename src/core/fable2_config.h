@@ -245,6 +245,9 @@ struct Values {
   // [graphics] ambient_occlusion: seeds the SDK cvar post_ao (AO from the
   // scene depth, applied by the colour grade, so it follows post_grade).
   bool ambient_occlusion = true;
+  // [graphics] sun_shadows: seeds the SDK cvar post_sun_shadows (screen-space
+  // sun shadows inside the AO pass, so it follows post_ao).
+  bool sun_shadows = true;
   // [graphics] anti_aliasing / bloom: seed the SDK cvars post_aa / post_bloom
   // (both run inside the colour grade, so they follow post_grade too).
   bool anti_aliasing = true;

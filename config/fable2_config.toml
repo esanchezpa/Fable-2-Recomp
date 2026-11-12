@@ -295,6 +295,12 @@ post_processing = true
 # Modern graphics are on. Costs about 2% FPS. Default: true
 ambient_occlusion = true
 
+# Sun Shadows: short, sharp sun shadows from rocks, roots, trunks and walls
+# onto the ground (the game's light maps only give soft blotches), traced
+# through the depth buffer. Part of Ambient Occlusion: only on when that is.
+# Default: true
+sun_shadows = true
+
 # Anti-Aliasing: FXAA on the final picture. Smooths the stair-stepped edges
 # that remain on leaves and grass. Part of Post-Processing. Costs under 1% FPS.
 # Default: true
