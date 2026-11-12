@@ -1,0 +1,18 @@
+{
+  "_about": "tools/material_swap.py spec: game colour texture hash -> ambientCG material (CC0). normal = the normal map the same draws bind (log_frame_textures, fetch constant 2).",
+  "E5A478D254794597": {"material": "Grass004", "repeat": 1, "mode": "organic", "normal": "8B4F5D76D3F1EF19", "note": "Bower Lake main grass"},
+  "7D64C810476EB02D": {"material": "Grass001", "repeat": 1, "mode": "organic", "normal": "1457E1FCD07F8571", "note": "bright grass"},
+  "B20490D48396C561": {"material": "Grass003", "repeat": 1, "mode": "organic", "normal": null, "note": "dark olive grass"},
+  "153302CEFD446FEF": {"material": "Grass002", "repeat": 1, "mode": "organic", "normal": "2BEB01886FA0D826", "note": "mossy grass"},
+  "E1902BD4CDDD6858": {"material": "Ground067", "repeat": 1, "mode": "organic", "normal": "B2C9BF74DBB5E2D7", "note": "dirt path"},
+  "D57180EDE33C2555": {"material": "Ground013", "repeat": 1, "mode": "organic", "normal": null, "note": "dry sandy ground"},
+  "2FBB8CB0EF4CE8C5": {"material": "Ground085", "repeat": 1, "mode": "organic", "normal": "8CE047F05DCC5C9C", "note": "brown dirt"},
+  "374AF4EBF9AE8B6F": {"material": "Ground003", "repeat": 1, "mode": "organic", "normal": "37CCB8D0E9841AA9", "note": "grass and dirt mix"},
+  "10DBAAAA8750F65C": {"material": "Rock022", "repeat": 1, "mode": "organic", "normal": "F6672585D148D581", "note": "Bower Lake cliffs"},
+  "B2B14F075FE32E2E": {"material": "Rock023", "repeat": 1, "mode": "organic", "normal": null, "note": "market rock"},
+  "57B36A8D10D107C1": {"material": "Bricks091", "repeat": 1, "mode": "global", "detail": 0.85, "chroma": 0.35, "normal": "014BF80F3E084E0C", "note": "Bowerstone ashlar wall"},
+  "9E9A4527C9CD3EA7": {"material": "Bricks091", "repeat": 1, "mode": "global", "detail": 0.85, "chroma": 0.35, "normal": null, "note": "Bowerstone ashlar wall (flat normal map shared)"},
+  "811D86414B9AE468": {"material": "PavingStones025", "repeat": 1, "mode": "global", "normal": "EEBBEF0D4CDA148E", "note": "rubble stone wall"},
+  "EF21EE6C6D74AE89": {"material": "Planks011", "repeat": 1, "mode": "global", "normal": "975CCA7867E299F2", "note": "dark timber"},
+  "06F10658ACCDD910": {"material": "Planks021", "repeat": 2, "mode": "global", "normal": "D51754363B17046F", "note": "board planks"}
+}
