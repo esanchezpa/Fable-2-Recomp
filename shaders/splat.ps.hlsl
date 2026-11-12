@@ -101,9 +101,7 @@ float4 main(PSInput8c input) : SV_Target0 {
   r10.xyz = TF0(r0.xy).xyz;                                              // 9
   float magnify = 0.0;
   if (SMOOTH_COLOR) {
-    float2 tex = TextureSize(0);
-    float2 fx = ddx(color_uv) * tex, fy = ddy(color_uv) * tex;
-    magnify = saturate((1.0 - sqrt(max(dot(fx, fx), dot(fy, fy)))) * 2.0);
+    magnify = Magnification(2, color_uv);
     if (magnify > 0.0) r10.xyz = lerp(r10.xyz, SmoothFetch(0, 2, color_uv).xyz, magnify);
   }
   { float4 t = SMOOTH_LIGHT ? SmoothFetch(3, 3, r3.xy) : TF3(r3.xy);     // 10

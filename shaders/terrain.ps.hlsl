@@ -113,10 +113,7 @@ float4 main(PSInput10 input) : SV_Target0 {
   float magnify = 0.0;
   if (SMOOTH_COLOR) {
     // Texels per pixel of the guest-size map; below 1 it is magnified.
-    float2 tex = TextureSize(0);
-    float2 fx = ddx(ground_uv) * tex, fy = ddy(ground_uv) * tex;
-    float footprint = sqrt(max(dot(fx, fx), dot(fy, fy)));
-    magnify = saturate((1.0 - footprint) * 2.0);
+    magnify = Magnification(0, ground_uv);
     if (magnify > 0.0) r11.xyz = lerp(r11.xyz, SmoothFetch(0, 0, ground_uv).xyz, magnify);
   }                                              // 10
   float2 relief = 0.0;

@@ -99,9 +99,7 @@ float4 main(PSInput3 input) : SV_Target0 {
 
   float magnify = 0.0;
   if (ALBEDO_BUMP != 0.0 || SMOOTH_COLOR) {
-    float2 tex = TextureSize(13);
-    float2 fx = ddx(uv) * tex, fy = ddy(uv) * tex;
-    magnify = saturate((1.0 - sqrt(max(dot(fx, fx), dot(fy, fy)))) * 2.0);
+    magnify = Magnification(0, uv);
   }
   if (ALBEDO_BUMP != 0.0) {
     float3 dpx = ddx(r1.xyz), dpy = ddy(r1.xyz);
