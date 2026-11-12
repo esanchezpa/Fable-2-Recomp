@@ -1,18 +1,580 @@
 {
-  "_about": "tools/material_swap.py spec: game colour texture hash -> ambientCG material (CC0). normal = the normal map the same draws bind (log_frame_textures, fetch constant 2).",
-  "E5A478D254794597": {"material": "Grass004", "repeat": 1, "mode": "organic", "normal": "8B4F5D76D3F1EF19", "note": "Bower Lake main grass"},
-  "7D64C810476EB02D": {"material": "Grass001", "repeat": 1, "mode": "organic", "normal": "1457E1FCD07F8571", "note": "bright grass"},
-  "B20490D48396C561": {"material": "Grass003", "repeat": 1, "mode": "organic", "normal": null, "note": "dark olive grass"},
-  "153302CEFD446FEF": {"material": "Grass002", "repeat": 1, "mode": "organic", "normal": "2BEB01886FA0D826", "note": "mossy grass"},
-  "E1902BD4CDDD6858": {"material": "Ground067", "repeat": 1, "mode": "organic", "normal": "B2C9BF74DBB5E2D7", "note": "dirt path"},
-  "D57180EDE33C2555": {"material": "Ground013", "repeat": 1, "mode": "organic", "normal": null, "note": "dry sandy ground"},
-  "2FBB8CB0EF4CE8C5": {"material": "Ground085", "repeat": 1, "mode": "organic", "normal": "8CE047F05DCC5C9C", "note": "brown dirt"},
-  "374AF4EBF9AE8B6F": {"material": "Ground003", "repeat": 1, "mode": "organic", "normal": "37CCB8D0E9841AA9", "note": "grass and dirt mix"},
-  "10DBAAAA8750F65C": {"material": "Rock022", "repeat": 1, "mode": "organic", "normal": "F6672585D148D581", "note": "Bower Lake cliffs"},
-  "B2B14F075FE32E2E": {"material": "Rock023", "repeat": 1, "mode": "organic", "normal": null, "note": "market rock"},
-  "57B36A8D10D107C1": {"material": "Bricks091", "repeat": 1, "mode": "global", "detail": 0.85, "chroma": 0.35, "normal": "014BF80F3E084E0C", "note": "Bowerstone ashlar wall"},
-  "9E9A4527C9CD3EA7": {"material": "Bricks091", "repeat": 1, "mode": "global", "detail": 0.85, "chroma": 0.35, "normal": null, "note": "Bowerstone ashlar wall (flat normal map shared)"},
-  "811D86414B9AE468": {"material": "PavingStones025", "repeat": 1, "mode": "global", "normal": "EEBBEF0D4CDA148E", "note": "rubble stone wall"},
-  "EF21EE6C6D74AE89": {"material": "Planks011", "repeat": 1, "mode": "global", "normal": "975CCA7867E299F2", "note": "dark timber"},
-  "06F10658ACCDD910": {"material": "Planks021", "repeat": 2, "mode": "global", "normal": "D51754363B17046F", "note": "board planks"}
+ "_about": "tools/material_swap.py spec: game colour texture hash -> ambientCG material (CC0). normal = the normal map the same draws bind (log_frame_textures, fetch constant 2).",
+ "E5A478D254794597": {
+  "material": "Grass004",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "Bower Lake main grass"
+ },
+ "7D64C810476EB02D": {
+  "material": "Grass001",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "bright grass"
+ },
+ "B20490D48396C561": {
+  "material": "Grass003",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "dark olive grass"
+ },
+ "153302CEFD446FEF": {
+  "material": "Grass002",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "mossy grass"
+ },
+ "E1902BD4CDDD6858": {
+  "material": "Ground067",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "dirt path"
+ },
+ "D57180EDE33C2555": {
+  "material": "Ground013",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "dry sandy ground"
+ },
+ "2FBB8CB0EF4CE8C5": {
+  "material": "Ground085",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "brown dirt"
+ },
+ "374AF4EBF9AE8B6F": {
+  "material": "Ground003",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "grass and dirt mix"
+ },
+ "10DBAAAA8750F65C": {
+  "material": "Rock022",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "Bower Lake cliffs"
+ },
+ "B2B14F075FE32E2E": {
+  "material": "Rock023",
+  "repeat": 1,
+  "mode": "organic",
+  "normal": null,
+  "note": "market rock"
+ },
+ "57B36A8D10D107C1": {
+  "material": "Bricks091",
+  "repeat": 1,
+  "mode": "global",
+  "detail": 0.85,
+  "chroma": 0.35,
+  "normal": null,
+  "note": "Bowerstone ashlar wall"
+ },
+ "9E9A4527C9CD3EA7": {
+  "material": "Bricks091",
+  "repeat": 1,
+  "mode": "global",
+  "detail": 0.85,
+  "chroma": 0.35,
+  "normal": null,
+  "note": "Bowerstone ashlar wall (flat normal map shared)"
+ },
+ "811D86414B9AE468": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "mode": "global",
+  "normal": null,
+  "note": "rubble stone wall"
+ },
+ "EF21EE6C6D74AE89": {
+  "material": "Planks011",
+  "repeat": 1,
+  "mode": "global",
+  "normal": null,
+  "note": "dark timber"
+ },
+ "06F10658ACCDD910": {
+  "material": "Planks021",
+  "repeat": 2,
+  "mode": "global",
+  "normal": null,
+  "note": "board planks"
+ },
+ "27D62AE51EFA19FB": {
+  "material": "Bricks099",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "stone",
+  "note": "picked stone #5"
+ },
+ "3EFCF98BCDD8FD1B": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "stone",
+  "note": "picked stone #8"
+ },
+ "41A3F143CE7B7C5F": {
+  "material": "Rocks018",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": "F7DD9F79C63567C6",
+  "category": "stone",
+  "note": "picked stone #9"
+ },
+ "75D6BAEBB35075D4": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "1141B8128BD8EFB7",
+  "category": "stone",
+  "note": "picked stone #16"
+ },
+ "8111DCA040939C42": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "8284AD566AF29FBA",
+  "category": "stone",
+  "note": "picked stone #17"
+ },
+ "9517E5D8421DE4FB": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "stone",
+  "note": "picked stone #21"
+ },
+ "A07A2F4829467F29": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "8284AD566AF29FBA",
+  "category": "stone",
+  "note": "picked stone #24"
+ },
+ "DD0E55555057629C": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "stone",
+  "note": "picked stone #27"
+ },
+ "E73079B82A9C9170": {
+  "material": "PavingStones025",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "stone",
+  "note": "picked stone #28"
+ },
+ "014A567D18C95185": {
+  "material": "Planks031A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #32"
+ },
+ "066789E615053FCE": {
+  "material": "Planks005",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "326227757B8F87CB",
+  "category": "wood",
+  "note": "picked wood #33"
+ },
+ "07A14AAA68F91C10": {
+  "material": "WoodSiding002",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "FD7FA1D360EE4745",
+  "category": "wood",
+  "note": "picked wood #34"
+ },
+ "0971E14553DCF94C": {
+  "material": "Planks031B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #35"
+ },
+ "0D0F5B0F115834BC": {
+  "material": "Planks030B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #36"
+ },
+ "1588DBEA3A1E1E11": {
+  "material": "Planks023B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #37"
+ },
+ "1B3B904A2156C155": {
+  "material": "Planks031B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #38"
+ },
+ "223B7EAB49208435": {
+  "material": "Planks034A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #39"
+ },
+ "335C53457E8EA381": {
+  "material": "Planks023A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "F73F9C40B65036E0",
+  "category": "wood",
+  "note": "picked wood #40"
+ },
+ "4BD43A4D6240FCBB": {
+  "material": "Planks031A",
+  "repeat": 2,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #41"
+ },
+ "4C3391EA934BF558": {
+  "material": "Planks031B",
+  "repeat": 2,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #42"
+ },
+ "560B80B12EEA3588": {
+  "material": "Wood069",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "E178E7EBBE90A989",
+  "category": "wood",
+  "note": "picked wood #43"
+ },
+ "588A944BCECBD7D8": {
+  "material": "Planks031B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #44"
+ },
+ "6052E676C4FFE7F2": {
+  "material": "WoodSiding002",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #45"
+ },
+ "6746397D5F3DB1B3": {
+  "material": "Planks023A",
+  "repeat": 1,
+  "rotate": 90,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #46"
+ },
+ "6933ED1F7203E788": {
+  "material": "Planks023C",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #47"
+ },
+ "6AB4E90DC833A363": {
+  "material": "Wood026",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #48"
+ },
+ "6ABD1A2BB991324B": {
+  "material": "Planks023C",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #49"
+ },
+ "9070F2653736D6D9": {
+  "material": "WoodSiding002",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #50"
+ },
+ "9B30872D1265F629": {
+  "material": "Planks025C",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #51"
+ },
+ "A6272B8DCF70440D": {
+  "material": "Planks031A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #52"
+ },
+ "BF93782E3F83E611": {
+  "material": "Planks023B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #54"
+ },
+ "C09499CF67D6F00E": {
+  "material": "WoodFloor049",
+  "repeat": 2,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #55"
+ },
+ "C4EA9C1253A6B883": {
+  "material": "WoodSiding002",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #56"
+ },
+ "C6CB0A03A82F4285": {
+  "material": "Wood081",
+  "repeat": 1,
+  "rotate": 90,
+  "mode": "global",
+  "normal": "F0ABE0FC8DBEC034",
+  "category": "wood",
+  "note": "picked wood #57"
+ },
+ "D95C942B1A042770": {
+  "material": "Planks023A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #58"
+ },
+ "E1881D8918D10C29": {
+  "material": "Planks031B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #59"
+ },
+ "E272D4608F8C3BD7": {
+  "material": "Planks023A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #60"
+ },
+ "F52AA06C6152CAC5": {
+  "material": "Planks023A",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "wood",
+  "note": "picked wood #61"
+ },
+ "1D0701038EFC097E": {
+  "material": "Bark008",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": null,
+  "category": "bark",
+  "note": "picked bark #62"
+ },
+ "20F24C01C9F625F1": {
+  "material": "Bark003",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": null,
+  "category": "bark",
+  "note": "picked bark #63"
+ },
+ "4752206CEC791251": {
+  "material": "Bark003",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": null,
+  "category": "bark",
+  "note": "picked bark #64"
+ },
+ "50D41A036F3539BC": {
+  "material": "Bark016",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": "ED7C7224E64C7FC2",
+  "category": "bark",
+  "note": "picked bark #65"
+ },
+ "A9109586828DAC32": {
+  "material": "Bark003",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": null,
+  "category": "bark",
+  "note": "picked bark #67"
+ },
+ "E1A489BFA329B2EA": {
+  "material": "Bark003",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": null,
+  "category": "bark",
+  "note": "picked bark #68"
+ },
+ "315962EFF85E01A0": {
+  "material": "PavingStones049",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "D5E9685B8E636A5D",
+  "category": "brick",
+  "note": "picked brick #80"
+ },
+ "35860E52E6FFA938": {
+  "material": "Bricks076B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "3296C691204AF6C7",
+  "category": "brick",
+  "note": "picked brick #81"
+ },
+ "5252C84F09E1CE1E": {
+  "material": "Bricks034",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "brick",
+  "note": "picked brick #83"
+ },
+ "73E98E3A396C8B77": {
+  "material": "PavingStones048",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "ED0822A59768988F",
+  "category": "brick",
+  "note": "picked brick #84"
+ },
+ "78BB4C401B768A80": {
+  "material": "Bricks076C",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "brick",
+  "note": "picked brick #85"
+ },
+ "84DBA483D20193FD": {
+  "material": "Bricks076B",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": "3296C691204AF6C7",
+  "category": "brick",
+  "note": "picked brick #86"
+ },
+ "8E65D9C1D29E55BC": {
+  "material": "Bricks032",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "global",
+  "normal": null,
+  "category": "brick",
+  "note": "picked brick #87"
+ },
+ "872D2F44757DF84D": {
+  "material": "Gravel021",
+  "repeat": 1,
+  "rotate": 0,
+  "mode": "organic",
+  "normal": "51401A9D086E6137",
+  "category": "ground",
+  "note": "picked ground #89"
+ }
 }

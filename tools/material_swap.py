@@ -88,9 +88,10 @@ def gauss_wrap(a, sigma):
     return np.fft.irfft2(np.fft.rfft2(a) * k, s=(h, w)).astype(np.float32)
 
 
-def tile_to(img, repeat, size, resample=Image.LANCZOS):
-    """The image tiled repeat x repeat, resized to size (w, h)."""
-    a = np.asarray(img)
+def tile_to(img, repeat, size, resample=Image.LANCZOS, rotate=0):
+    """The image turned rotate degrees (multiple of 90, counter-clockwise),
+    tiled repeat x repeat, resized to size (w, h)."""
+    a = np.rot90(np.asarray(img), (rotate // 90) % 4)
     a = np.tile(a, (repeat, repeat) + (1,) * (a.ndim - 2))
     return Image.fromarray(a).resize(size, resample)
 
@@ -109,12 +110,12 @@ def from_opp(opp):
     return np.clip(opp @ MI.T, 0.0, 1.0)
 
 
-def match_colour(new, orig, mode, detail, chroma=None):
+def match_colour(new, orig, mode, detail, chroma=None, scale_div=96.0):
     """new, orig: float RGB (h, w, 3) in 0..1 at the output size."""
     n, o = to_opp(new), to_opp(orig)
     out = np.empty_like(n)
     if mode == 'organic':
-        sigma = new.shape[1] / 96.0
+        sigma = new.shape[1] / scale_div
         for c in range(3):
             o_lo = gauss_wrap(o[..., c], sigma)
             n_lo = gauss_wrap(n[..., c], sigma)
@@ -166,15 +167,21 @@ def detect_convention(colour, normal):
     return {'r~-gx': corr(r, -gx), 'g~-gy': corr(g, -gy), 'r~-gy': corr(r, -gy), 'g~-gx': corr(g, -gx)}
 
 
-def build_normal(mat_normal_gl, repeat, size, strength, sx, sy):
+def build_normal(mat_normal_gl, repeat, size, strength, sx, sy, rotate=0):
     """ambientCG NormalGL (x right, y UP the image) -> game convention."""
     a = np.asarray(mat_normal_gl.convert('RGB'), np.float32)
-    a = np.tile(a, (repeat, repeat, 1))
-    comps = [np.asarray(Image.fromarray(a[..., c]).resize(size, Image.LANCZOS), np.float32) / 127.5 - 1.0
-             for c in range(3)]
-    x, y_up, z = comps
     # Image-axis gradient sense: +x right, +y DOWN the image.
-    x, y = x * strength, -y_up * strength
+    a = np.stack([a[..., 0], 255.0 - a[..., 1], a[..., 2]], axis=2)
+    for _ in range((rotate // 90) % 4):
+        # A quarter turn counter-clockwise moves the pixels and turns the
+        # vectors with them: old right becomes up, old down becomes right.
+        a = np.rot90(a, 1)
+        a = np.stack([a[..., 1], 255.0 - a[..., 0], a[..., 2]], axis=2)
+    a = np.tile(a, (repeat, repeat, 1))
+    comps = [np.asarray(Image.fromarray(np.ascontiguousarray(a[..., c])).resize(size, Image.LANCZOS),
+                        np.float32) / 127.5 - 1.0 for c in range(3)]
+    x, y, z = comps
+    x, y = x * strength, y * strength
     z = np.maximum(z, 0.05)
     n = np.sqrt(x * x + y * y + z * z) + 1e-6
     x, y = sx * x / n, sy * y / n
@@ -281,10 +288,12 @@ def main():
             k = max(1, min(args.scale, args.max_out // max(ow, oh)))
             size = (ow * k, oh * k)
             repeat = int(v.get('repeat', 1))
-            mat = tile_to(material_map(folder, 'Color').convert('RGB'), repeat, size)
+            rotate = int(v.get('rotate', 0))
+            mat = tile_to(material_map(folder, 'Color').convert('RGB'), repeat, size, rotate=rotate)
             o_up = np.asarray(orig.resize(size, Image.LANCZOS), np.float32) / 255.0
             res = match_colour(np.asarray(mat, np.float32) / 255.0, o_up, v.get('mode', 'organic'),
-                               float(v.get('detail', args.detail)), v.get('chroma'))
+                               float(v.get('detail', args.detail)), v.get('chroma'),
+                               float(v.get('scale_div', 96.0)))
             res_img = Image.fromarray((res * 255 + 0.5).astype(np.uint8), 'RGB')
             png = os.path.join(staged, h + '.png')
             res_img.save(png)
@@ -304,7 +313,7 @@ def main():
                 tx = (1.0 if m['r~-gx'] > 0 else -1.0) if abs(m.get('r~-gx', 0)) > 0.3 else sx
                 ty = (1.0 if m['g~-gy'] > 0 else -1.0) if abs(m.get('g~-gy', 0)) > 0.3 else sy
                 nimg = build_normal(material_map(folder, 'NormalGL'), repeat, (nw * nk, nhh * nk),
-                                    float(v.get('strength', 1.0)), tx, ty)
+                                    float(v.get('strength', 1.0)), tx, ty, rotate)
                 npng = os.path.join(staged, nh + '.png')
                 nimg.save(npng)
                 jobs.append((npng, 'BC5_UNORM', False))
