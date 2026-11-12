@@ -32,7 +32,7 @@
 #define ALBEDO_BUMP 5.0
 #endif
 #ifndef FOG
-#define FOG 0.6
+#define FOG 1.0  // far terrain keeps its haze: it hides the low-detail backdrop patches
 #endif
 
 // --- SDK translator interface (shaders/xe_common.hlsli) -------------------
