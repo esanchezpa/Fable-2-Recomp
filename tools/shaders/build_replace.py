@@ -30,6 +30,7 @@ SHADERS = [
     ('lit_shadow.ps.hlsl', 'ps_5_1', [], '648B965C200A5113'),  # lit + shadow map: pillars, ruins, dead trees
     ('trunk.ps.hlsl', 'ps_5_1', [], '00E09D1BC5295D52'),            # tree trunks, second foliage layer
     ('fern.ps.hlsl', 'ps_5_1', [], '165EDCD2CB963868'),             # ferns and bushes
+    ('tonemap.ps.hlsl', 'ps_5_1', [], '37B186F4BD3288F7'),          # final composite: bloom + tone curve
 ]
 
 
