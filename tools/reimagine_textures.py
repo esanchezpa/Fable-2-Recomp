@@ -324,6 +324,9 @@ def main():
     ap.add_argument('--reclassify', action='store_true')
     ap.add_argument('--force', action='store_true', help='redo textures already in the output')
     ap.add_argument('--keep-png', help='also write the before/after PNGs here (for judging)')
+    ap.add_argument('--resume', action='store_true',
+                    help='reuse redraws already in --keep-png (same strength / control) instead of '
+                         'generating them again, so a stopped run can continue')
     args = ap.parse_args()
 
     out = args.out or os.path.join(args.pack_root, 'replace')
@@ -395,7 +398,11 @@ def main():
         for n, it in enumerate(todo, 1):
             img = decode_to(args.tools, [it], decoded, key='src')[it['hash']]
             seed = args.seed + int(it['hash'][:6], 16)
-            res = generate_one(pipe, img, it['label'], args, seed, (it['w'], it['h']))
+            kept = os.path.join(args.keep_png or '', f"{it['hash']}_{it['label']}_after_s{args.strength}_c{args.control}.png")
+            if args.resume and args.keep_png and os.path.exists(kept):
+                res = Image.open(kept).convert('RGBA')
+            else:
+                res = generate_one(pipe, img, it['label'], args, seed, (it['w'], it['h']))
             if args.keep_png:
                 img.save(os.path.join(args.keep_png, f"{it['hash']}_{it['label']}_before.png"))
                 res.save(os.path.join(args.keep_png,
