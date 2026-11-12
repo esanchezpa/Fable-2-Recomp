@@ -76,6 +76,12 @@ PROMPTS = {
             'seamless albedo texture, highly detailed',
     'roof': 'old roof tiles with faint dull lichen and chips, flat even lighting, '
             'seamless albedo texture, highly detailed',
+    'grass': 'dense meadow grass and clover seen from above, fine individual blades, tiny leaves '
+             'and soil showing through, flat even lighting, seamless albedo texture, highly detailed',
+    # Mixed texture sheets (props, rocks, trunks in one 1024 atlas): the tile
+    # ControlNet keeps each region's layout; the prompt only asks for detail.
+    'atlas': 'weathered natural materials, rough stone, tree bark, moss, worn wood and earth, '
+             'fine surface detail, flat even lighting, highly detailed texture sheet',
 }
 # Per-category departures from the command-line defaults. Wood needs a
 # stronger pass before plank grain deepens at all; roof moss otherwise comes
@@ -205,6 +211,12 @@ def generate_one(pipe, src_rgba, label, args, seed, native):
     (see below); where the source is finer than that, its finer detail (the
     upscaler's grain) is added back afterwards."""
     import torch
+    if args.scale > 0:
+        nw, nh = native
+        f = min(args.scale, args.max_out / max(nw, nh))
+        tw, th = max(1, int(nw * f)), max(1, int(nh * f))
+        if (tw, th) != src_rgba.size:
+            src_rgba = src_rgba.resize((tw, th), Image.LANCZOS)
     ov = OVERRIDES.get(label, {})
     prompt = PROMPTS[label]
     negative = NEGATIVE + (', ' + ov['negative'] if 'negative' in ov else '')
@@ -300,6 +312,10 @@ def main():
     ap.add_argument('--steps', type=int, default=24)
     ap.add_argument('--guidance', type=float, default=5.0)
     ap.add_argument('--size', type=int, default=1024, help='long side at generation')
+    ap.add_argument('--scale', type=float, default=0,
+                    help='output at this multiple of the game texture (capped by --max-out); '
+                         '0 = the source size (the upscaled pack entry)')
+    ap.add_argument('--max-out', type=int, default=2048, help='largest output side with --scale')
     ap.add_argument('--pad', type=int, default=32, help='wrapped border for tiling, in source texels')
     ap.add_argument('--seed', type=int, default=1234)
     ap.add_argument('--only', default='', help='comma-separated hash prefixes to process')
