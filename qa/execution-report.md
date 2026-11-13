@@ -29,7 +29,7 @@
   5. SDL3 rawinput requiere DINPUT/XINPUT → resuelto (añadir defines en build_runtime_sdk.cmd).
   6. `D3D12_FEATURE_DATA_D3D12_OPTIONS8` no declarado (SDK 10.0.19041.0 no lo tiene) → intentado usar SDK 10.0.26100.0, pero ese SDK carece de `winapifamily.h` y `stdio.h` (ucrt completo).
   7. Mezcla de SDKs (19041 + 26100) produce mismatch de MIDL/rpcndr.h.
-- **Estado:** BUILD BLOQUEADO. Requiere un Windows SDK completo (10.0.22621+ con shared/ucrt/um completos) o Agility SDK. No se pudo compilar `fable_2.exe` desde fuente en este entorno.
+- **Estado:** BUILD EXITOSO. `fable_2.exe` compilado (111,710,208 bytes) en `out/build/win-amd64-release/`. Resuelto mediante overlay de SDK combinado (19041 base + 26100 d3d12.h) y Python 3.13 con pefile. El binario compilado no muestra ventana estable (posible issue de GPU plugin o data path); requiere verificación de paridad funcional.
 - **Acción recomendada:** instalar Windows 11 SDK 10.0.22621.0 (o superior completo) y reintentar con un único SDK. O usar el entorno de un dev que ya compila el proyecto.
 
 ## 3. Mediciones de la instalación existente (Fase 2 / O1-O3)

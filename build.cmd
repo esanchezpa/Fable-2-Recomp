@@ -143,7 +143,7 @@ if not exist "generated\rexglue.cmake" (
 
 rem (inline -D with quotes at the call site: cmd cannot carry a quoted value
 rem in a variable for paths with spaces)
-cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENTOOL%" || exit /b 1
+cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENTOOL%" -DPython3_EXECUTABLE="C:\Users\edgar\.python\Scripts\python.exe" || exit /b 1
 rem CMake can only list the generated sources once codegen has written them.
 if not exist "generated\default\sources.cmake" (
     cmake --build out\build\%CONFIG% --target fable_2_codegen || exit /b 1
