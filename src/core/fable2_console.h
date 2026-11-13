@@ -154,6 +154,10 @@ struct State {
   bool lua_wait = false;        // a dispatched line has not reported done yet
   Clock::time_point lua_deadline{};
   uint64_t pad_frames = 0;      // `pad` releases its buttons when this reaches 0
+  // `pad glide`: the left stick eases from glide_from to glide_to over glide_len
+  // frames (smoothstep), then stays there until the next pad command.
+  float glide_from[2] = {0, 0}, glide_to[2] = {0, 0}, glide_cur[2] = {0, 0};
+  uint64_t glide_len = 0, glide_pos = 0;
   // pause: the game thread waits at the end of the console poll; see hold_paused.
   bool paused = false;
   uint64_t step_frames = 0;     // frames to run before pausing again ("step")
@@ -1024,8 +1028,32 @@ inline bool run_host_command(const std::string& line, uint8_t* base) {
     if (what == "off") {
       PadStore().Publish({});
       s.pad_frames = 0;
+      s.glide_len = s.glide_pos = 0;
+      s.glide_cur[0] = s.glide_cur[1] = 0;
       return out("pad", "released"), true;
     }
+    if (what == "glide") {
+      // pad glide <lx> <ly> <frames>: ease the left stick from where it is to
+      // (lx, ly) over frames, then keep holding it (no release, no gap), so a
+      // run of glides steers like a person. `pad glide 0 0 <n>` eases to a stop.
+      int64_t lx = 0, ly = 0;
+      uint64_t frames = 0;
+      if (W.size() < 5 || !parse_i(W[2], lx) || !parse_i(W[3], ly) || !parse_u(W[4], frames) ||
+          frames == 0 || frames > 100000)
+        return out("pad", "usage: pad glide <lx> <ly> <frames>", true), true;
+      s.pad_frames = 0;
+      s.glide_from[0] = s.glide_cur[0];
+      s.glide_from[1] = s.glide_cur[1];
+      s.glide_to[0] = static_cast<float>(std::clamp<int64_t>(lx, -32768, 32767));
+      s.glide_to[1] = static_cast<float>(std::clamp<int64_t>(ly, -32768, 32767));
+      s.glide_len = frames;
+      s.glide_pos = 0;
+      s.wait_frames = frames;
+      s.wait_time = false;
+      return true;
+    }
+    s.glide_len = s.glide_pos = 0;
+    s.glide_cur[0] = s.glide_cur[1] = 0;
     if (what == "stick") {
       int64_t lx = 0, ly = 0;
       if (W.size() < 4 || !parse_i(W[2], lx) || !parse_i(W[3], ly)) return out("pad", "usage: pad stick <lx> <ly> [frames]", true), true;
@@ -1634,6 +1662,16 @@ inline void poll(PPCContext& ctx, uint8_t* base) {
   ++s.frames;
   if (s.step_frames) --s.step_frames;
   if (s.pad_frames && --s.pad_frames == 0) PadStore().Publish({});
+  if (s.glide_len && s.glide_pos < s.glide_len) {
+    ++s.glide_pos;
+    const float t = static_cast<float>(s.glide_pos) / static_cast<float>(s.glide_len);
+    const float e = t * t * (3.0f - 2.0f * t);
+    fable2::remote::InputSnapshot snap;
+    for (int i = 0; i < 2; ++i) s.glide_cur[i] = s.glide_from[i] + (s.glide_to[i] - s.glide_from[i]) * e;
+    snap.stk_lx = static_cast<int32_t>(s.glide_cur[0]);
+    snap.stk_ly = static_cast<int32_t>(s.glide_cur[1]);
+    PadStore().Publish(snap);
+  }
   poll_pause_key();
   if (s.frames == 1)
     f5lua::logline("[console] %s active, root=%s\n", FABLE2_CONSOLE_BUILD, s.root.string().c_str());
