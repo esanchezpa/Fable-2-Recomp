@@ -39,6 +39,7 @@
 - Log analizado: `logs/fable_2_023.log`.
 - Resultados:
   - `vsync present gate`: ~58-60 host presents suprimidos/s (monitor 60 Hz). Esto indica que el guest produce muy pocos frames nuevos por segundo en esta configuración; el host repite el mismo frame.
+- **A/B realtime_texture_morphing**: con `realtime_texture_morphing=false` + `hero_dog_texture_readback=true`, el gate empeoró (56.9 suprimidos/s vs 45.1 baseline). Config revertida a original. Resultado: **rechazado** (empeora el gate).
   - `WAIT_REG_MEM long-waits`: ~48-56/s, total sleep ~48-56 ms/s, vsync=1. Valores consistentes con el pacing de vsync.
   - 168 shaders traducidos, 377 pipelines creados en 44 ms (sin hitch de compilación en esta sesión).
 - **Interpretación (limitada sin visión):** el gate de ~59 suprimidos/s sugiere que el guest no está produciendo frames nuevos a la tasa esperada durante movimiento. Consistente con el reporte del usuario de ~25-30 FPS perceptibles.
