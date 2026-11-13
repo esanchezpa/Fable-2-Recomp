@@ -18,16 +18,49 @@ public sealed class ModelPack
 {
     private const string StampName = "sparrow-overlay.json";
 
+    /// <summary>The built game files (data\streaming.bnk, ...) the overlay links in.</summary>
     public string PackFolder { get; }
     public string OverlayFolder { get; }
+    /// <summary>The downloaded, keyed model files (*.emdl) the build reads.</summary>
+    public string ModelsFolder { get; }
+    /// <summary>True when PROJECT_SPARROW_MODELS points at a ready-built local pack (never rebuilt or removed).</summary>
+    public bool Custom { get; }
 
     public ModelPack(string dataFolder)
     {
-        PackFolder = Environment.GetEnvironmentVariable("PROJECT_SPARROW_MODELS") is { Length: > 0 } custom
-            ? Path.GetFullPath(custom)
+        Custom = Environment.GetEnvironmentVariable("PROJECT_SPARROW_MODELS") is { Length: > 0 };
+        PackFolder = Custom
+            ? Path.GetFullPath(Environment.GetEnvironmentVariable("PROJECT_SPARROW_MODELS")!)
             : Path.Combine(dataFolder, "sparrow-models");
         OverlayFolder = Path.Combine(dataFolder, "sparrow-game");
+        ModelsFolder = new TexturePack(dataFolder, PackKind.Models).ReplaceFolder;
     }
+
+    /// <summary>True when downloaded model files are present.</summary>
+    public bool Downloaded => Directory.Exists(ModelsFolder) && Directory.EnumerateFiles(ModelsFolder, "*.emdl").Any();
+
+    /// <summary>True when Sparrow Edition has models to show (built or still to build).</summary>
+    public bool Available => Custom ? Installed : Downloaded;
+
+    /// <summary>True when the downloaded models must be (re)built for these game files before playing.</summary>
+    public bool NeedsBuild(string gameFolder) =>
+        !Custom && Downloaded && !SparrowModels.IsCurrent(Path.GetFullPath(gameFolder), ModelsFolder, PackFolder);
+
+    /// <summary>True when the built files are ready to play with these game files.</summary>
+    public bool Ready(string gameFolder) => Custom ? Installed : Downloaded && !NeedsBuild(gameFolder);
+
+    /// <summary>Deletes the built files and the overlay (the downloaded pack is TexturePack.Remove's job).</summary>
+    public void RemoveBuild()
+    {
+        if (Directory.Exists(OverlayFolder)) Directory.Delete(OverlayFolder, recursive: true);
+        if (!Custom && Directory.Exists(PackFolder)) Directory.Delete(PackFolder, recursive: true);
+    }
+
+    /// <summary>Free space the build needs: the three rebuilt banks are about the size of the originals.</summary>
+    public static long BuildBytes(string gameFolder) =>
+        new[] { @"data\streaming.bnk", @"data\levels.bnk", @"data\Globals\globals_model_headers.bnk" }
+            .Select(relative => new FileInfo(Path.Combine(gameFolder, relative)))
+            .Sum(info => info.Exists ? info.Length : 0) + (256L << 20);
 
     public bool Installed
     {

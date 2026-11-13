@@ -72,6 +72,28 @@ public sealed class TexturePackState
 
 public sealed class TexturePackException(string message) : Exception(message);
 
+/// <summary>
+/// One downloadable pack: where its releases live, where it installs and what
+/// its files look like. The Modern textures and the Sparrow model pack share
+/// the same manifest, parts and download code.
+/// </summary>
+/// <param name="Label">Used in messages ("the texture pack ...").</param>
+/// <param name="TagPrefix">GitHub release tag prefix; the number after it is the version.</param>
+/// <param name="OverrideVariable">Folder (or manifest.json path) used instead of GitHub: for testing.</param>
+/// <param name="FolderName">Folder under the data folder holding the pack, its state and downloads.</param>
+/// <param name="InstallSubfolder">Folder under FolderName the files unpack into.</param>
+/// <param name="Extension">The only file type a part may hold.</param>
+/// <param name="NameLength">Exact file name length, or 0 for any.</param>
+public sealed record PackKind(string Label, string TagPrefix, string OverrideVariable, string FolderName,
+                              string InstallSubfolder, string Extension, int NameLength)
+{
+    public static readonly PackKind Textures =
+        new("texture pack", "textures-v", "PROJECT_SPARROW_TEXTURES", "textures", "replace", ".edds", 21);
+
+    public static readonly PackKind Models =
+        new("Sparrow model pack", "models-v", "PROJECT_SPARROW_MODEL_PACK", "sparrow-pack", "models", ".emdl", 0);
+}
+
 public enum PartStatus { Waiting, Downloading, Verifying, Unpacking, Installed, Failed }
 
 public sealed record PartProgress(string Name, PartStatus Status, long Done, long Size, string? Error = null);
@@ -79,20 +101,24 @@ public sealed record PartProgress(string Name, PartStatus Status, long Done, lon
 public sealed class TexturePack
 {
     public const string RepoApi = "https://api.github.com/repos/gitgudscrub/Fable-2-Recomp/releases?per_page=30";
-    public const string TagPrefix = "textures-v";
-    /// <summary>Folder (or manifest.json path) used instead of the GitHub release: for testing.</summary>
-    public const string OverrideVariable = "PROJECT_SPARROW_TEXTURES";
     private const int Parallel = 3;
 
     private static readonly HttpClient Http = CreateClient();
 
     private readonly string _dataFolder;
+    private readonly PackKind _kind;
     private string? _localSource;   // folder holding manifest.json and the parts, when overridden
 
-    public TexturePack(string dataFolder) => _dataFolder = dataFolder;
+    public TexturePack(string dataFolder, PackKind? kind = null)
+    {
+        _dataFolder = dataFolder;
+        _kind = kind ?? PackKind.Textures;
+    }
 
-    public string TexturesFolder => Path.Combine(_dataFolder, "textures");
-    public string ReplaceFolder => Path.Combine(TexturesFolder, "replace");
+    public PackKind Kind => _kind;
+    public string TexturesFolder => Path.Combine(_dataFolder, _kind.FolderName);
+    /// <summary>Where the pack's files are installed (textures/replace for the texture pack).</summary>
+    public string ReplaceFolder => Path.Combine(TexturesFolder, _kind.InstallSubfolder);
     public string StatePath => Path.Combine(TexturesFolder, "pack-state.json");
     private string DownloadFolder => Path.Combine(TexturesFolder, "downloads");
 
@@ -114,12 +140,12 @@ public sealed class TexturePack
     /// </summary>
     public async Task<TexturePackManifest?> FetchManifestAsync(CancellationToken cancel)
     {
-        string? overridePath = Environment.GetEnvironmentVariable(OverrideVariable);
+        string? overridePath = Environment.GetEnvironmentVariable(_kind.OverrideVariable);
         if (!string.IsNullOrEmpty(overridePath))
         {
             string manifestPath = Directory.Exists(overridePath) ? Path.Combine(overridePath, "manifest.json") : overridePath;
             _localSource = Path.GetDirectoryName(manifestPath);
-            return Parse(await File.ReadAllBytesAsync(manifestPath, cancel), await File.ReadAllTextAsync(manifestPath + ".sig", cancel));
+            return Parse(await File.ReadAllBytesAsync(manifestPath, cancel), await File.ReadAllTextAsync(manifestPath + ".sig", cancel), _kind);
         }
 
         using JsonDocument releases = JsonDocument.Parse(await Http.GetStringAsync(RepoApi, cancel));
@@ -129,7 +155,7 @@ public sealed class TexturePack
         {
             if (release.TryGetProperty("draft", out JsonElement draft) && draft.GetBoolean()) continue;
             string tag = release.GetProperty("tag_name").GetString() ?? "";
-            if (!tag.StartsWith(TagPrefix, StringComparison.Ordinal) || !int.TryParse(tag[TagPrefix.Length..], out int version)) continue;
+            if (!tag.StartsWith(_kind.TagPrefix, StringComparison.Ordinal) || !int.TryParse(tag[_kind.TagPrefix.Length..], out int version)) continue;
             if (version <= bestVersion || !release.TryGetProperty("assets", out JsonElement assets)) continue;
             string? manifest = null, signature = null;
             foreach (JsonElement asset in assets.EnumerateArray())
@@ -146,27 +172,27 @@ public sealed class TexturePack
         }
         if (manifestUrl is null || signatureUrl is null) return null;
         if (!manifestUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
-            throw new TexturePackException("The texture pack release points outside GitHub.");
+            throw new TexturePackException($"The {_kind.Label} release points outside GitHub.");
         byte[] manifestBytes = await Http.GetByteArrayAsync(manifestUrl, cancel);
         string signatureText = await Http.GetStringAsync(signatureUrl, cancel);
-        return Parse(manifestBytes, signatureText);
+        return Parse(manifestBytes, signatureText, _kind);
     }
 
-    private static TexturePackManifest Parse(byte[] manifestBytes, string signatureText)
+    private static TexturePackManifest Parse(byte[] manifestBytes, string signatureText, PackKind kind)
     {
         string sha = Convert.ToHexString(SHA256.HashData(manifestBytes)).ToLowerInvariant();
         if (signatureText.Length > 4096 || !UpdateSignature.Verify(UpdateSignature.ReleasePublicKey, "manifest.json", sha, signatureText))
-            throw new TexturePackException("The texture pack's manifest isn't signed by Project Sparrow, so it wasn't used.");
+            throw new TexturePackException($"The {kind.Label}'s manifest isn't signed by Project Sparrow, so it wasn't used.");
         TexturePackManifest manifest = JsonSerializer.Deserialize<TexturePackManifest>(manifestBytes)
-                                       ?? throw new TexturePackException("The texture pack's manifest is empty.");
-        if (manifest.Parts.Count == 0) throw new TexturePackException("The texture pack's manifest lists no parts.");
+                                       ?? throw new TexturePackException($"The {kind.Label}'s manifest is empty.");
+        if (manifest.Parts.Count == 0) throw new TexturePackException($"The {kind.Label}'s manifest lists no parts.");
         foreach (TexturePackPart part in manifest.Parts)
         {
             if (part.Name.Length == 0 || part.Name.Contains('/') || part.Name.Contains('\\') || part.Name.Contains("..")
                 || !part.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || part.Sha256.Length != 64 || part.Size <= 0)
-                throw new TexturePackException("The texture pack's manifest has a malformed part entry.");
+                throw new TexturePackException($"The {kind.Label}'s manifest has a malformed part entry.");
             if (!part.Url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
-                throw new TexturePackException("The texture pack's manifest points outside GitHub.");
+                throw new TexturePackException($"The {kind.Label}'s manifest points outside GitHub.");
         }
         return manifest;
     }
@@ -190,7 +216,7 @@ public sealed class TexturePack
             try
             {
                 return Directory.Exists(ReplaceFolder)
-                    ? new DirectoryInfo(ReplaceFolder).EnumerateFiles("*.edds").Sum(file => file.Length) : 0;
+                    ? new DirectoryInfo(ReplaceFolder).EnumerateFiles("*" + _kind.Extension).Sum(file => file.Length) : 0;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { return 0; }
         }
@@ -271,15 +297,16 @@ public sealed class TexturePack
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
                     cancel.ThrowIfCancellationRequested();
-                    // Flat <HASH>.edds entries only: anything else is not ours.
+                    // Flat entries of the pack's own file type only: anything else is not ours.
                     string name = Path.GetFileName(entry.FullName);
-                    if (name != entry.FullName || !name.EndsWith(".edds", StringComparison.OrdinalIgnoreCase) || name.Length != 21)
+                    if (name != entry.FullName || !name.EndsWith(_kind.Extension, StringComparison.OrdinalIgnoreCase)
+                        || (_kind.NameLength > 0 && name.Length != _kind.NameLength) || name.Contains(".."))
                         throw new TexturePackException($"{part.Name} holds an unexpected file ({entry.FullName}).");
                     entry.ExtractToFile(Path.Combine(unpackFolder, name), overwrite: true);
                 }
             // The part is complete on disk: move its files into place. Each move is
             // atomic, so the game only ever sees whole files.
-            foreach (string file in Directory.EnumerateFiles(unpackFolder, "*.edds"))
+            foreach (string file in Directory.EnumerateFiles(unpackFolder, "*" + _kind.Extension))
                 File.Move(file, Path.Combine(ReplaceFolder, Path.GetFileName(file)), overwrite: true);
         }, cancel);
         TryDeleteFolder(unpackFolder);
@@ -344,7 +371,7 @@ public sealed class TexturePack
     {
         TryDeleteFolder(DownloadFolder);
         if (Directory.Exists(ReplaceFolder))
-            foreach (string file in Directory.EnumerateFiles(ReplaceFolder, "*.edds"))
+            foreach (string file in Directory.EnumerateFiles(ReplaceFolder, "*" + _kind.Extension))
                 File.Delete(file);
         if (File.Exists(StatePath)) File.Delete(StatePath);
     }

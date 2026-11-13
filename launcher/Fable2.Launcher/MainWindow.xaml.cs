@@ -102,10 +102,23 @@ public partial class MainWindow : Window
                 scroll.Tick += (_, _) => { scroll.Stop(); TexturesParts.BringIntoView(); };
                 scroll.Start();
             }
+            // --preview=models does the same for Sparrow models (PROJECT_SPARROW_MODEL_PACK);
+            // --preview=play presses Play straight away (builds Sparrow Edition first when needed).
+            if (Environment.GetCommandLineArgs().Contains("--preview=models"))
+            {
+                OpenPage(TabSettings);
+                ModelsDownloadClicked(this, new RoutedEventArgs());
+                var scroll = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+                scroll.Tick += (_, _) => { scroll.Stop(); ModelsBar.BringIntoView(); };
+                scroll.Start();
+            }
+            if (Environment.GetCommandLineArgs().Contains("--preview=play") && _state == LauncherState.Ready) LaunchGame();
         };
         Closing += (_, _) =>
         {
             _texturesCancel?.Cancel();   // a part in progress resumes next time
+            _modelsCancel?.Cancel();
+            _buildCancel?.Cancel();      // an unfinished build runs again next time
             if (_dirty) SaveAll(quiet: true);
             // Install a downloaded update once the launcher closes, unless the game is
             // (about to be) running from the folder the update replaces.
@@ -462,8 +475,8 @@ public partial class MainWindow : Window
         if (!edition.ModernGraphics || !TexturesHalfInstalled) SetModernGraphics(edition.ModernGraphics);
         string name = edition == Edition.Sparrow ? edition.Name : edition.Name + " edition";
         if (SaveAll())
-            ShowToast(edition.Models && !new ModelPack(_home.DataFolder).Installed
-                ? $"{name} selected. The model pack isn't installed yet, so the original models show for now."
+            ShowToast(edition.Models && !Models.Available
+                ? $"{name} selected. The model pack isn't installed yet (Settings > Sparrow models), so the original models show for now."
                 : $"{name} selected.");
         UpdateCustomMarker();
     }
@@ -524,6 +537,13 @@ public partial class MainWindow : Window
             GameLaunchPlan plan = GameLaunchPlanner.Create(ExecutableDirectory, _home.GameFolder,
                 GameCompatibilityInspector.Inspect(_home.GameFolder));
             if (!SaveAll()) return;
+            ModelPack models = Models;
+            bool sparrow = Edition.Find(_home.Settings.Edition).Models;
+            if (sparrow && models.NeedsBuild(plan.GameRoot))
+            {
+                BuildThenLaunch();
+                return;
+            }
             _home.SyncScripts();
             Directory.CreateDirectory(_home.DataFolder);
             var startInfo = new ProcessStartInfo
@@ -534,8 +554,7 @@ public partial class MainWindow : Window
                 UseShellExecute = false
             };
             string gameRoot = plan.GameRoot;
-            ModelPack models = new(_home.DataFolder);
-            if (Edition.Find(_home.Settings.Edition).Models && models.Installed)
+            if (sparrow && models.Ready(plan.GameRoot))
                 gameRoot = models.PrepareGameRoot(plan.GameRoot);
             startInfo.ArgumentList.Add("--game_data_root=" + gameRoot);
             startInfo.ArgumentList.Add("--user_root=" + _home.DataFolder);
@@ -674,7 +693,8 @@ public partial class MainWindow : Window
     {
         StopButton.IsEnabled = false;
         StatusTitle.Text = "Stopping…";
-        if (_hashDecision is not null) _hashDecision.TrySetResult(false);
+        if (_buildCancel is not null) _buildCancel.Cancel();
+        else if (_hashDecision is not null) _hashDecision.TrySetResult(false);
         else _stopRequested = true;
     }
 
@@ -765,6 +785,8 @@ public partial class MainWindow : Window
         {
             RefreshTexturesSection();
             CheckTexturesQuietly();
+            RefreshModelsSection();
+            CheckModelsQuietly();
         }
     }
 
