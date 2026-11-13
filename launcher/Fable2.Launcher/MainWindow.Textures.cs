@@ -183,6 +183,10 @@ public partial class MainWindow
         RefreshTexturesSection();
     }
 
+    /// <summary>True while a download is running or stopped part-way (Modern graphics stay off then).</summary>
+    private bool TexturesHalfInstalled =>
+        _texturesBusy || (_texturesManifest is { } manifest && Textures.State.Parts.Count > 0 && !Textures.IsComplete(manifest));
+
     /// <summary>Writes [graphics] texture_pack, keeping the in-memory settings in step.</summary>
     private void SetModernGraphics(bool on)
     {

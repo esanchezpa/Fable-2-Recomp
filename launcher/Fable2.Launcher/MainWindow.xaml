@@ -901,10 +901,10 @@
                                Tag="30 fps · 720p · as on Xbox" Checked="EditionChecked" />
                   <Rectangle Width="1" Fill="{DynamicResource GoldLineSoft}" />
                   <RadioButton x:Name="EditionEnhanced" Style="{StaticResource EditionChoice}" Content="Enhanced"
-                               Tag="60 fps · 1440p · FXAA" Checked="EditionChecked" />
+                               Tag="60 fps · 1440p · AI textures" Checked="EditionChecked" />
                   <Rectangle Width="1" Fill="{DynamicResource GoldLineSoft}" />
-                  <RadioButton x:Name="EditionExperimental" Style="{StaticResource EditionChoice}" Content="Experimental"
-                               Tag="Uncapped · 4x scale · may glitch" Checked="EditionChecked" />
+                  <RadioButton x:Name="EditionSparrow" Style="{StaticResource EditionChoice}" Content="Sparrow Edition"
+                               Tag="Remade models · a modern look" Checked="EditionChecked" />
                 </StackPanel>
               </Border>
               <TextBlock x:Name="CustomMarker" Text="Custom changes" FontSize="13.5" Foreground="{StaticResource Ember}"

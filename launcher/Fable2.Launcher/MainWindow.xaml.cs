@@ -319,7 +319,7 @@ public partial class MainWindow : Window
             SensitivityBox.Text = _recomp.MouseLookScale.ToString(CultureInfo.InvariantCulture);
             BuildKeybindRows(Fable2ConfigFile.ParseKeybinds(_recomp.KeyboardGamepadMap));
 
-            (edition.Id switch { "enhanced" => EditionEnhanced, "experimental" => EditionExperimental, _ => EditionOriginal })
+            (edition.Id switch { "enhanced" => EditionEnhanced, "sparrow" => EditionSparrow, _ => EditionOriginal })
                 .IsChecked = true;
             (_home.Settings.Channel == "beta" ? ChannelBeta : ChannelStable).IsChecked = true;
         SetTheme(_home.Settings.Theme, save: false);
@@ -444,7 +444,7 @@ public partial class MainWindow : Window
     {
         if (_loading || sender is not RadioButton { IsChecked: true } choice) return;
         Edition edition = choice == EditionEnhanced ? Edition.Enhanced
-                        : choice == EditionExperimental ? Edition.Experimental : Edition.Original;
+                        : choice == EditionSparrow ? Edition.Sparrow : Edition.Original;
         _loading = true;
         try
         {
@@ -459,7 +459,12 @@ public partial class MainWindow : Window
         }
         finally { _loading = false; }
         _home.Settings.Edition = edition.Id;
-        if (SaveAll()) ShowToast($"{edition.Name} edition selected.");
+        if (!edition.ModernGraphics || !TexturesHalfInstalled) SetModernGraphics(edition.ModernGraphics);
+        string name = edition == Edition.Sparrow ? edition.Name : edition.Name + " edition";
+        if (SaveAll())
+            ShowToast(edition.Models && !new ModelPack(_home.DataFolder).Installed
+                ? $"{name} selected. The model pack isn't installed yet, so the original models show for now."
+                : $"{name} selected.");
         UpdateCustomMarker();
     }
 
@@ -528,7 +533,11 @@ public partial class MainWindow : Window
                 WorkingDirectory = _home.DataFolder,
                 UseShellExecute = false
             };
-            startInfo.ArgumentList.Add("--game_data_root=" + plan.GameRoot);
+            string gameRoot = plan.GameRoot;
+            ModelPack models = new(_home.DataFolder);
+            if (Edition.Find(_home.Settings.Edition).Models && models.Installed)
+                gameRoot = models.PrepareGameRoot(plan.GameRoot);
+            startInfo.ArgumentList.Add("--game_data_root=" + gameRoot);
             startInfo.ArgumentList.Add("--user_root=" + _home.DataFolder);
             Process.Start(startInfo);
             _gameLaunched = true;

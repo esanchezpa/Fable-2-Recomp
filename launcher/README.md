@@ -56,7 +56,8 @@ Settings > Modern textures downloads the pre-built texture pack (about
 6 GB) in 16 parts with a progress bar each, pausable and resumable, from
 the fork's `textures-v<N>` GitHub release. The manifest is signed with the
 release key and every part is checksummed; parts unpack into a temporary
-folder and move into `textureseplace` whole, so the game never sees a
+folder and move into `textures
+eplace` whole, so the game never sees a
 half-written file. `[graphics] texture_pack` in `fable2_config.toml` stays
 `false` until the last part is in. `PROJECT_SPARROW_TEXTURES=<folder>`
 points the download at a local folder holding `manifest.json`, its `.sig`
@@ -67,9 +68,17 @@ flow: [docs/TEXTURE_PACK_DOWNLOAD.md](../docs/TEXTURE_PACK_DOWNLOAD.md).
 
 | Edition | Sets |
 |---|---|
-| Original | 720p, 1× scale, game texture filtering, no FXAA, 30 fps, motion blur on |
-| Enhanced | 1440p, 2× scale, 16× filtering, FXAA, 60 fps, motion blur off |
-| Experimental | 1440p, 4× scale, 16× filtering, FXAA, unlimited fps, motion blur off, faster world and animation ticks |
+| Original | 720p, 1× scale, game texture filtering, no FXAA, 30 fps, motion blur on, Modern graphics off |
+| Enhanced | 1440p, 2× scale, 16× filtering, FXAA, 60 fps, motion blur off, Modern graphics on (AI textures) |
+| Sparrow Edition | Enhanced, plus the remade models from the Sparrow model pack |
+
+Sparrow Edition plays from `<data folder>\sparrow-game`: a folder of hard links
+to the player's game files, with the model pack's files (`<data folder>\sparrow-models`,
+laid out like the game folder) in place of the ones it replaces. It is rebuilt
+whenever the pack or the game files change, takes no extra disk space, and needs
+both on the same drive. Without the pack, Sparrow Edition plays with the original
+models. `PROJECT_SPARROW_MODELS` points at a local pack for testing. A saved
+"experimental" edition (removed) loads as Enhanced and keeps the player's settings.
 
 Settings an edition doesn't name keep the player's value. Changing anything an
 edition sets shows **Custom changes** on the ribbon. Settings are written when
