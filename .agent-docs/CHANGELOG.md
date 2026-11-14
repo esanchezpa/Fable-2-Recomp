@@ -8,6 +8,7 @@
 - Recorded the 2026-11-14 guarded VFS retry: the clone did not reach verified QA gameplay, so no sampler runtime result is claimed; temporary files were restored and all 40 clone saves still match the witness clone.
 - Added guarded build/gameplay entry points and regression coverage for managed QA roots, storage limits, bounded traces, and child-process lifetime.
 - Routed build.cmd through the supervisor and added a dedicated launcher for copied QA gameplay trees; build Python selection remains process-local.
+- Added an S3 replay planner and QPC-window trace summarizer with bounded, source-level test coverage; these tools do not certify a safe route or FPS/display rate.
 
 ### Fixed
 - Sincronizado el stub de `poll_f5` del test nativo con el parámetro `focused` de la interfaz real.
