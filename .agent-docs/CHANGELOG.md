@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Reached gameplay via console pad navigation and confirmed the max-saves dialog blocks Continue; F5 via window_post crashed the process; sampler remains unavailable; restored all 40 saves and clone state.
 - Reached QA gameplay through console pad navigation (title -> Continue -> load save -> Old Bowerstone) and opened the F5 menu; sampler stayed unavailable after F5, so arming, movement, dump, and overhead remain unverified; restored clone state and all 40 saves.
 - Added concurrent passive Win32 PID/HWND/session/focus observation for the guarded QA clone, confirming a visible foreground game window during life of the process; title navigation still did not reach the menu, so sampler activation and overhead remain unverified.
 - Corrected and retained the observer's no-visible-window cutoff after its first run exposed a false cutoff despite visible HWND samples; restored the QA console state and verified the EXE, manifest, protocol files, and all 40 saves against their pre-run witnesses.
