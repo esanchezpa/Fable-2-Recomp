@@ -50,6 +50,12 @@
 #ifndef HIGHLIGHTS
 #define HIGHLIGHTS 0.75
 #endif
+// VIBRANCE: extra saturation that favours muted colours (0 = off), so
+//   hazy greens and earth tones get richer while already strong colours
+//   (and skin) barely move.
+#ifndef VIBRANCE
+#define VIBRANCE 0.4
+#endif
 #ifndef HIGHLIGHT_WHITE
 #define HIGHLIGHT_WHITE 1.0
 #endif
@@ -155,6 +161,10 @@ float4 main(PSInput1 input) : SV_Target0 {
   r0.w = dot(r0.zxy, C255.xyz);                                          // 14
   r1.xyz = r0.xzy - r0.w;                                                // 15
   r0.xyz = r1.xzy * C77.x + r0.xyz;                                      // 16
+  if (VIBRANCE != 0.0) {
+    float sat = max(r0.x, max(r0.y, r0.z)) - min(r0.x, min(r0.y, r0.z));
+    r0.xyz = max(r0.w + (r0.xyz - r0.w) * (1.0 + VIBRANCE * (1.0 - saturate(sat))), 0.0);
+  }
   r0.xyz = log2(abs(r0.xyz));                                            // 17-19
   r0.xyz = r0.xyz * C78.x;                                               // 20
   float4 o = float4(exp2(r0.x), exp2(r0.y), exp2(r0.z), exp2(r0.z));     // 21-23
