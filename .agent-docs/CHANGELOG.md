@@ -12,6 +12,9 @@
 - Updated package-release fixtures to expect the already-bundled keycap font and its license in the archive.
 - Aligned the native keyboard/gamepad test stub with the focused `poll_f5(bool)` interface.
 - Recorded passing guarded native tests and incremental Release link with the installed MSVC 14.44 toolset; the sampler VFS/runtime and campaign-performance gates remain open.
+- Corrected the in-game sampler test to shadow GameFace's metatable-backed `QuestManager` global without mutating the engine hero object.
+- Made the in-game sampler test restore its prior ring and counters, so its capacity-3 assertion does not leak into later QA sampling; the sampler source-contract suite now covers this cleanup.
+- Added a guarded SDK frame-event trace that distinguishes guest swaps, guest-output production/acquisition, and DXGI present attempts without treating any of them as proof of displayed frames.
 
 ### Fixed
 - Sincronizado el stub de `poll_f5` del test nativo con el parámetro `focused` de la interfaz real.

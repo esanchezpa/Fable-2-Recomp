@@ -15,6 +15,8 @@ clang++ -std=c++23 -I"%SDK%\include" "%~dp0native\test_present_rate_limiter.cpp"
 "%OUT%\present-limiter.exe" || exit /b 1
 clang++ -std=c++23 -I"%SDK%\include" "%~dp0native\test_guest_frame_meter.cpp" -o "%OUT%\meter.exe" || exit /b 1
 "%OUT%\meter.exe" || exit /b 1
+clang++ -std=c++23 -I"%SDK%\include" "%~dp0native\test_frame_event_trace.cpp" -o "%OUT%\frame-event-trace.exe" || exit /b 1
+"%OUT%\frame-event-trace.exe" || exit /b 1
 rem Keyboard/mouse -> gamepad map parsing (links the SDK's real keybinds.cpp;
 rem the extra -I dirs are the SDK's own thirdparty headers pulled in by its cvar
 rem and ppc/context includes).

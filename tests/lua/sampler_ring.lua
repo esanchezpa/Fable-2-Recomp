@@ -13,24 +13,36 @@ end
 local sampler = rawget(_G, "__f2_sampler")
 check(type(sampler) == "table", "sampler implementation is not loaded")
 if type(sampler) == "table" then
+  local original_state = {
+    ring = sampler.ring,
+    ring_count = sampler.ring:count(),
+    enabled = sampler.enabled,
+    pending_frames = sampler.pending_frames,
+    frame = sampler.frame,
+    window_frames = sampler.window_frames,
+    dropped = sampler.dropped,
+    sampled = sampler.sampled,
+  }
   check(sampler.enabled == false, "sampler must default off")
   check(sampler.set_enabled(1) == false, "non-boolean enable state accepted")
   check(sampler.configure(0) == false, "invalid capacity accepted")
   check(sampler.configure(4097) == false, "capacity above bound accepted")
   check(sampler.configure(3) == true, "valid capacity rejected")
-  local old_quest_manager = QuestManager
-  QuestManager = nil
+  -- GameFace exposes some engine globals through _G's __index, so assigning
+  -- nil does not reliably shadow QuestManager for the sampler under test.
+  local old_quest_manager = rawget(_G, "QuestManager")
+  rawset(_G, "QuestManager", { HeroEntity = nil })
   check(sampler.start(60) == false, "sampler started without a live hero reference")
-  QuestManager = old_quest_manager
+  rawset(_G, "QuestManager", old_quest_manager)
   check(sampler.start(0) == false, "zero-frame window accepted")
   check(sampler.start(21601) == false, "oversized frame window accepted")
   check(sampler.start(60) == true, "start failed")
   check(sampler.enabled == true, "start did not enable sampling")
 
   -- Tick with no live game entity must remain bounded and count missed samples.
-  QuestManager = nil
+  rawset(_G, "QuestManager", { HeroEntity = nil })
   for _ = 1, 60 do sampler.tick() end
-  QuestManager = old_quest_manager
+  rawset(_G, "QuestManager", old_quest_manager)
   check(sampler.enabled == false, "sampler did not stop at its frame bound")
   check(sampler.frame == 60, "sampler frame count did not reach its bound")
   check(sampler.dropped == 2, "invalid hero samples were not counted")
@@ -44,10 +56,12 @@ if type(sampler) == "table" then
   local sample_calls = 0
   sampler.sample = function() sample_calls = sample_calls + 1 end
   check(sampler.start(29) == true, "29-frame window did not start")
-  for _ = 1, 29 do sampler.tick() end
+  sampler.tick()
   check(sample_calls == 0, "sample ran before the 30-frame cadence")
-  check(sampler.enabled == false, "29-frame window did not auto-stop")
+  check(sampler.enabled == true, "29-frame window stopped before its bound")
   check(sampler.dump() == nil, "active sampler dump was allowed")
+  for _ = 2, 29 do sampler.tick() end
+  check(sampler.enabled == false, "29-frame window did not auto-stop")
   sampler.sample = original_sample
 
   check(sampler.start(60) == true, "manual-stop test did not start")
@@ -68,9 +82,9 @@ if type(sampler) == "table" then
     check(ring:count() == 3, "ring did not stay bounded at capacity")
     local values = ring:ordered()
     check(#values == 3, "ordered snapshot has wrong length")
-     check(values[1] == 22 and values[2] == 33 and values[3] == 44,
-         "overwrite/order mismatch")
-     check(ring:overwritten() == 1, "ring overwrite was not counted")
+    check(values[1] == 22 and values[2] == 33 and values[3] == 44,
+        "overwrite/order mismatch")
+    check(ring:overwritten() == 1, "ring overwrite was not counted")
   end
   check(sampler.enabled == false, "sampler unexpectedly enabled after ring test")
   check(sampler.start(1) == true, "restart failed")
@@ -93,6 +107,19 @@ if type(sampler) == "table" then
   check(sampler.enabled == true and sampler.pending_frames == 0,
       "delayed start did not begin after its wait")
   check(sampler.stop() == true, "delayed-start run could not be stopped")
+
+  -- Preserve the live QA sampler, including any buffered rows, rather than
+  -- leaving the test's capacity-3 ring installed in the game session.
+  sampler.ring = original_state.ring
+  sampler.enabled = original_state.enabled
+  sampler.pending_frames = original_state.pending_frames
+  sampler.frame = original_state.frame
+  sampler.window_frames = original_state.window_frames
+  sampler.dropped = original_state.dropped
+  sampler.sampled = original_state.sampled
+  check(sampler.ring == original_state.ring
+      and sampler.ring:count() == original_state.ring_count,
+      "test failed to restore the original sampler ring")
 end
 
 local status = #failures == 0 and "GREEN" or "RED"

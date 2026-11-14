@@ -19,6 +19,7 @@ class PerfSamplerContractTests(unittest.TestCase):
         cls.f5 = (ROOT / "src/lua/F5.lua").read_text(encoding="utf-8")
         cls.console = (ROOT / "src/lua/console_cmds.lua").read_text(encoding="utf-8")
         cls.cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        cls.lua_test = (ROOT / "tests/lua/sampler_ring.lua").read_text(encoding="utf-8")
 
     def test_sampler_is_loaded_by_f5_before_update_can_tick(self):
         self.assertRegex(
@@ -54,6 +55,13 @@ class PerfSamplerContractTests(unittest.TestCase):
         )
         self.assertIsNotNone(sample)
         self.assertNotRegex(sample.group(1), r"\b(?:print|cprint|loadfile|io\.open)\s*\(")
+
+    def test_in_game_sampler_test_restores_preexisting_runtime_state(self):
+        self.assertIn("local original_state = {", self.lua_test)
+        self.assertIn("ring_count = sampler.ring:count()", self.lua_test)
+        self.assertIn("sampler.ring = original_state.ring", self.lua_test)
+        self.assertIn("sampler.pending_frames = original_state.pending_frames", self.lua_test)
+        self.assertIn("sampler.sampled = original_state.sampled", self.lua_test)
 
 
 if __name__ == "__main__":
