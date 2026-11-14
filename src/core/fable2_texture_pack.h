@@ -75,6 +75,11 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
     seed("post_sun_map_radius", "180");
     seed("post_ao_strength", "0.75");
     seed("post_grade_dehaze_far", "0.3");
+    // Deeper shadows: more S-curve and a lower black floor; softer shafts
+    // that keep dark surfaces dark (post_light_shafts_shadows).
+    seed("post_grade_contrast", "0.25");
+    seed("post_grade_dehaze", "0.035");
+    seed("post_light_shafts_strength", "1.0");
   }
   // Startup only: the SDK swaps shaders in when it translates them. Next to
   // the exe, not the working directory: the launcher starts the game in the
