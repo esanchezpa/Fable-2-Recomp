@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Reached QA gameplay through console pad navigation (title -> Continue -> load save -> Old Bowerstone) and opened the F5 menu; sampler stayed unavailable after F5, so arming, movement, dump, and overhead remain unverified; restored clone state and all 40 saves.
 - Added concurrent passive Win32 PID/HWND/session/focus observation for the guarded QA clone, confirming a visible foreground game window during life of the process; title navigation still did not reach the menu, so sampler activation and overhead remain unverified.
 - Corrected and retained the observer's no-visible-window cutoff after its first run exposed a false cutoff despite visible HWND samples; restored the QA console state and verified the EXE, manifest, protocol files, and all 40 saves against their pre-run witnesses.
 - Added symbol-backed evidence for a first-chance AV during startup (invalid write in the Fable render loop), while documenting the ntdll symbol mismatch, repeated first-chance handler/log flood, guarded timeout, and that no fatal gameplay AV/root cause was established.
@@ -65,6 +66,7 @@
 - Plan maestro V4.0 de rendimiento y QA (`PLAN-MAESTRO-FABLE-II-RECOMP-OPTIMIZACION-QA-V4.0.md`).
 
 ### Changed
+- Reached QA gameplay through console pad navigation (title -> Continue -> load save -> Old Bowerstone) and opened the F5 menu; sampler stayed unavailable after F5, so arming, movement, dump, and overhead remain unverified; restored clone state and all 40 saves.
 - `build.cmd` adds the installed Visual Studio 18 CMake directory to its own process PATH without changing user or system settings.
 
 ### Fixed
@@ -76,6 +78,7 @@
 - Herramientas instaladas: game-player MCP, CapFrameX 1.9.2, etw-mcp, Tracy 0.15.0, RenderDoc 1.47.
 
 ### Changed
+- Reached QA gameplay through console pad navigation (title -> Continue -> load save -> Old Bowerstone) and opened the F5 menu; sampler stayed unavailable after F5, so arming, movement, dump, and overhead remain unverified; restored clone state and all 40 saves.
 - `tools/build_runtime_sdk.cmd`: añadidos defines SDL_JOYSTICK_DINPUT/XINPUT/RAWINPUT para resolver build SDK.
 - Toolchain: LLVM 20, Ninja, CMake (VS 18), Python 3.13 + pefile instalados.
 - Submódulo `thirdparty/rexglue-sdk` inicializado al pin `27a61267`.
