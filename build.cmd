@@ -20,15 +20,35 @@ rem   build.cmd -release [t]     build as Release (-O3) instead of Debug
 rem   build.cmd -r [t]           (same, short form)
 rem                              (out\build\win-amd64-release; stages the
 rem                              release rexruntime/rexgpu-xenos plugins)
-rem   build.cmd -clean [t]       wipe the build dir for the config instead of
+rem   build.cmd -clean [t]       remove only a guard-marked, evidence-free build dir
 rem   build.cmd -c [t]             building. E.g. "build.cmd -clean
 rem                                fable_2_profiler" deletes
-rem                                out\build\win-amd64-release-profiling
+rem                                (an existing unmarked tree is preserved)
 setlocal
 cd /d "%~dp0"
 
+rem Every build entrypoint runs beneath the D:-only storage/lifetime supervisor.
+rem The child verifies a per-run nonce, so an inherited flag alone cannot bypass it.
+if /i "%FABLE2_STORAGE_GUARD_ACTIVE%"=="1" goto storage_guard_child
+python "%~dp0tools\qa_storage_guard.py" build --repo-root "%~dp0." --timeout-seconds 14400 -- %*
+exit /b %ERRORLEVEL%
+
+:storage_guard_child
+python "%~dp0tools\qa_storage_guard.py" verify-build-child --repo-root "%~dp0." --manifest "%FABLE2_STORAGE_GUARD_MANIFEST%" --nonce "%FABLE2_STORAGE_GUARD_NONCE%" --guard-pid "%FABLE2_STORAGE_GUARD_PID%"
+if errorlevel 1 (
+    echo Error: build.cmd requires a valid active storage guard. 1>&2
+    exit /b 125
+)
+
 rem The launcher only needs the .NET SDK, not the much larger C++ toolchain.
 rem Self-contained is the default so the shipped exe needs no .NET install.
+rem Resolve Visual Studio's bundled CMake for this build process only. An
+rem optional FABLE2_CMAKE_BIN allows isolated tests/toolchain overrides without
+rem persisting a machine-wide PATH change.
+if not defined FABLE2_CMAKE_BIN set "FABLE2_CMAKE_BIN=C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+if exist "%FABLE2_CMAKE_BIN%\cmake.exe" set "PATH=%FABLE2_CMAKE_BIN%;%PATH%"
+if not exist "%FABLE2_CMAKE_BIN%\cmake.exe" if exist "%FABLE2_CMAKE_BIN%\cmake.cmd" set "PATH=%FABLE2_CMAKE_BIN%;%PATH%"
+
 if /i "%~1"=="launcher" (
     call "%~dp0launcher\build-launcher.cmd" || exit /b 1
     exit /b 0
@@ -108,14 +128,13 @@ if /i "%TARGET%"=="fable_2_profiler" (
 rem Clean: wipe the whole build dir for the selected config (a full clean is
 rem just deleting the tree for a Ninja + CMake build) and stop.
 if "%CLEAN%"=="1" (
-    if exist "out\build\%CONFIG%" (
-        rmdir /s /q "out\build\%CONFIG%"
-        echo Cleaned out\build\%CONFIG%
-    ) else (
-        echo Nothing to clean: out\build\%CONFIG% does not exist
-    )
+    python "%~dp0tools\qa_storage_guard.py" clean-build --repo-root "%~dp0." --config "%CONFIG%" --apply || exit /b 125
     exit /b 0
 )
+
+rem Mark only a new empty output tree. Existing unmarked trees remain buildable,
+rem but cannot be deleted by -clean because their ownership is not proven.
+python "%~dp0tools\qa_storage_guard.py" mark-build-dir --repo-root "%~dp0." --config "%CONFIG%" || exit /b 125
 
 rem Pinned source submodule, needed by every build.
 set "SDKSRC=%~dp0thirdparty\rexglue-sdk"
@@ -143,7 +162,7 @@ if not exist "generated\rexglue.cmake" (
 
 rem (inline -D with quotes at the call site: cmd cannot carry a quoted value
 rem in a variable for paths with spaces)
-cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENTOOL%" -DPython3_EXECUTABLE="C:\Users\edgar\.python\Scripts\python.exe" || exit /b 1
+cmake --preset %CONFIG% -DCMAKE_PREFIX_PATH="%REXSDK%" -Drexglue_DIR="%REXSDK%\lib\cmake\rexglue" -DREXGLUE_SDK_ROOT="%REXSDK%" -DREXGLUE_SDK_SOURCE="%SDKSRC%" -DFABLE2_CODEGEN_TOOL="%CODEGENTOOL%" || exit /b 1
 rem CMake can only list the generated sources once codegen has written them.
 if not exist "generated\default\sources.cmake" (
     cmake --build out\build\%CONFIG% --target fable_2_codegen || exit /b 1

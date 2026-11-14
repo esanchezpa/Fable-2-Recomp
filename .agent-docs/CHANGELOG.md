@@ -7,6 +7,7 @@
 - Added an opt-in bounded Lua sampler with frame-window auto-stop and an existing F5-loop tick hook; documented guarded QA RED/GREEN evidence and the remaining runtime and overhead gates.
 - Recorded the 2026-11-14 guarded VFS retry: the clone did not reach verified QA gameplay, so no sampler runtime result is claimed; temporary files were restored and all 40 clone saves still match the witness clone.
 - Added guarded build/gameplay entry points and regression coverage for managed QA roots, storage limits, bounded traces, and child-process lifetime.
+- Routed build.cmd through the supervisor and added a dedicated launcher for copied QA gameplay trees; build Python selection remains process-local.
 
 ### Fixed
 - Sincronizado el stub de `poll_f5` del test nativo con el parámetro `focused` de la interfaz real.
