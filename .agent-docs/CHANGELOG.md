@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Documented RenderDoc PATH injection evidence: three WER crashes name `renderdoc.dll_unloaded`, A/B guard runs show crash with RenderDoc in PATH vs 60 s stability without it, no IFEO/AppInit/global hook, and a controlled test protocol that varies only the child PATH without system changes.
 - Recorded the guarded `f5diag` runtime attempt: the clone remained at title/menu, the console pump explicitly dropped the command before invoking its handler, WER startup crashes named `renderdoc.dll_unloaded` without persistent dumps, and restoration verified all 40 QA saves plus the manifest; no sampler cause is inferred.
 - Added opt-in F5 load diagnostic: F5.lua now captures loadfile/pcall results and stores them in `__f2_f5_load_diag`; console command `f5diag` exposes them on demand. TDD source-contract tests added (9/9 pass). No behavior change to F5 or sampler; runtime QA still pending under guard.
 - Matched the 11:01:23 WER fast-fail to guarded run `20261114T160002Z-40544-4272598a`; documented the later observer-deadline runs, Release F5 logging limitation, and verified QA save/manifest restoration without attributing the crash to Lua or the sampler.
