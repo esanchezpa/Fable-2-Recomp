@@ -246,6 +246,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   }
   r2.xy = abs(r7.xy) * C0.zw + C0.xy;                                    // 33
   r2.w = TF8(r2.xy).x;                                                   // 34
+  float dbg_shadow = r2.w;
   r14.xyz = C254.w - C22.xyz;                                            // 35
   r7.xyz = r11.zyx * C27.w;                                              // 36
   { float v = dot(r5.xyz, r5.xyz); r6.x = log2(abs(r6.x)); r6.w = v; }   // 37
@@ -308,6 +309,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     r6.xyz = r6.xyz * r6.xyz;                                            // 70
     r2.xyz = r8.yzw * r6.xyz + r2.xyz;                                   // 71
   }
+  float dbg_fog = 0.0;
   r6.x = r0.z - C67.x;                                                   // 72
   r6.yzw = r2.xyz * C49.xyz;                                             // 73
   if (r6.x > 0.0) {                                                      // p0
@@ -316,6 +318,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     r1.xyz = TF5(r0.w).xyz;                                              // 76
     r2.xyz = C254.w - r1.xyz;                                            // 77
     { float3 v = r0.xyz - C68.xyz; r6.x = saturate(C67.z * r6.x); r0.xyz = v; }  // 78
+    dbg_fog = r6.x;
     r0.xyz = r6.x * r0.zyx + C68.zyx;                                    // 79
     r2.xyz = r2.xyz * C28.y;                                             // 80
     r0.xyz = r2.xyz * r0.zyx - r6.yzw;                                   // 81
@@ -342,6 +345,12 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
 #elif DEBUG_VIEW == 7
   // R wear mask, G stretch / 32, B the wear pattern.
   o.xyz = float3(wear_mask, stretch / 32.0, wear);
+#elif DEBUG_VIEW == 8
+  o.xyz = r8.yzw;         // albedo
+#elif DEBUG_VIEW == 9
+  o.xyz = dbg_shadow;     // screen-space shadow buffer (tf8)
+#elif DEBUG_VIEW == 10
+  o.xyz = float3(dbg_fog, saturate(r0.z / 4000.0), 0.0);  // R fog amount, G distance
 #endif
   AlphaTest(o.w);
   coverage = AlphaToMask(o.w, input.position.xy);
