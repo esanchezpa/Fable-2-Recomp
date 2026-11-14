@@ -41,6 +41,35 @@
 #ifndef CLARITY
 #define CLARITY 0.25
 #endif
+// HIGHLIGHTS: soft roll-off instead of the original hard clip at 1 (0 =
+//   original). Values below this knee are untouched; above it the brightest
+//   channel eases toward 1 keeping the hue, so the sky keeps its gradient and
+//   clouds and sunlit leaves keep detail. HIGHLIGHT_WHITE: blend from that
+//   hue-kept curve (0) to a per-channel curve (1), which lets the brightest
+//   colours drift toward white as film does.
+#ifndef HIGHLIGHTS
+#define HIGHLIGHTS 0.75
+#endif
+#ifndef HIGHLIGHT_WHITE
+#define HIGHLIGHT_WHITE 1.0
+#endif
+
+float RollOff1(float x) {
+  float k = HIGHLIGHTS, r = 1.0 - HIGHLIGHTS;
+  return x <= k ? x : k + r * (1.0 - exp(-(x - k) / r));
+}
+
+float3 RollOff(float3 c) {
+  float m = max(c.x, max(c.y, c.z));
+  if (HIGHLIGHTS <= 0.0 || m <= HIGHLIGHTS) return saturate(c);
+  // Hue-kept: scale the colour so its brightest channel follows the curve.
+  float3 h = c * (RollOff1(m) / m);
+  // Per channel: each channel follows the curve on its own, so the very
+  // brightest colours drift toward white as film does (a blown sky stays a
+  // bright haze rather than turning a strong pink or blue).
+  float3 f = float3(RollOff1(c.x), RollOff1(c.y), RollOff1(c.z));
+  return saturate(lerp(h, f, HIGHLIGHT_WHITE));
+}
 
 // --- SDK translator interface (shaders/xe_common.hlsli) -------------------
 #define XE_FLOAT_CONSTANTS 6
@@ -119,7 +148,8 @@ float4 main(PSInput1 input) : SV_Target0 {
   r1.xyz *= GLOW;
   { float s = saturate(C47.x * r0.z); r2.xyz = -r0.z + r2.xyz; r0.x = s; }  // 9
   r0.xyz = r0.x * r2.xyz + r0.z;                                         // 10
-  r0.xyz = saturate(r0.w * r0.xzy);                                      // 11
+  float3 pre_clip = r0.w * r0.xzy;
+  r0.xyz = RollOff(pre_clip);                                            // 11 (saturate)
   r1.xyz = -r1.xyz * r0.xyz + r1.xyz;                                    // 12
   r0.xyz = r1.xzy + r0.xzy;                                              // 13
   r0.w = dot(r0.zxy, C255.xyz);                                          // 14
@@ -128,6 +158,12 @@ float4 main(PSInput1 input) : SV_Target0 {
   r0.xyz = log2(abs(r0.xyz));                                            // 17-19
   r0.xyz = r0.xyz * C78.x;                                               // 20
   float4 o = float4(exp2(r0.x), exp2(r0.y), exp2(r0.z), exp2(r0.z));     // 21-23
+#if DEBUG_VIEW == 2
+  // Clipping: red = how far the brightest channel goes over 1 (x4), green =
+  // the luminance before the clip (dimmed).
+  { float m = max(pre_clip.x, max(pre_clip.y, pre_clip.z));
+    o = float4(saturate((m - 1.0) * 4.0), saturate(Luma(pre_clip)) * 0.5, 0.0, 1.0); }
+#endif
 #if DEBUG_VIEW == 1
   o = float4(r1.xzy, 1.0);   // the (scaled) bloom alone
 #endif
