@@ -5,6 +5,7 @@
 ### Changed
 - Añadido al informe QA el análisis offline de ambos minidumps con CDB/WinDbg oficial, el contexto de excepción y las limitaciones de atribución; no se aplica un parche sin causa raíz demostrada.
 - Documentada la comparación QA OFF/ON con watchdog y protección hash de los 40 saves; una AV `0xC0000005` ocurrió cerca de F5 en la corrida ON, pero sin dump ni control F5 OFF válido no se atribuye a una causa ni se aplica un parche.
+- Registrado que el control OFF+F5 agotó el watchdog antes de alcanzar el mismo save/modal y que los 28 tests independientes de sampler contract, replay/QPC y storage guard pasan; runtime y causalidad siguen sin demostrarse.
 
 ### Added
 - Incluido `thirdparty/rexglue-sdk/out` en el presupuesto de almacenamiento administrado y añadida una prueba de regresión; las builds del SDK ya no quedan fuera del límite del guard.
