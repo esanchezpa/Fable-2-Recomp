@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Changed
+- Added concurrent passive Win32 PID/HWND/session/focus observation for the guarded QA clone, confirming a visible foreground game window during life of the process; title navigation still did not reach the menu, so sampler activation and overhead remain unverified.
+- Corrected and retained the observer's no-visible-window cutoff after its first run exposed a false cutoff despite visible HWND samples; restored the QA console state and verified the EXE, manifest, protocol files, and all 40 saves against their pre-run witnesses.
 - Added symbol-backed evidence for a first-chance AV during startup (invalid write in the Fable render loop), while documenting the ntdll symbol mismatch, repeated first-chance handler/log flood, guarded timeout, and that no fatal gameplay AV/root cause was established.
 - Recorded the guarded profiler/CDB gameplay run: matching private PDB symbols loaded, the save reached gameplay, only first-chance access violations were logged, no crash dump or unhandled failure occurred before the 540-second watchdog, and the QA executable, manifest, and all 40 saves were restored/verified.
 - Documented the guarded menu-navigation diagnosis: the game window was focused, `E` mapped to A, `Down` did not move the menu, `S` (StickDown) selected Continue, and the existing save reached gameplay; all 40 QA save hashes remained unchanged.
