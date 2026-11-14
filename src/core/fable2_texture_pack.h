@@ -64,6 +64,7 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
   // post_grade.
   seed("post_ao", cfg.ambient_occlusion ? "true" : "false");
   seed("post_sun_shadows", cfg.sun_shadows ? "true" : "false");
+  seed("post_sun_map", cfg.sun_shadow_map ? "true" : "false");
   seed("post_aa", cfg.anti_aliasing ? "true" : "false");
   seed("post_bloom", cfg.bloom ? "true" : "false");
   // Startup only: the SDK swaps shaders in when it translates them. Next to

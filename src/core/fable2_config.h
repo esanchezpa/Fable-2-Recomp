@@ -248,6 +248,9 @@ struct Values {
   // [graphics] sun_shadows: seeds the SDK cvar post_sun_shadows (screen-space
   // sun shadows inside the AO pass, so it follows post_ao).
   bool sun_shadows = true;
+  // [graphics] sun_shadow_map: seeds the SDK cvar post_sun_map (the depth
+  // pre-pass redrawn from the sun; needs sun_shadows).
+  bool sun_shadow_map = true;
   // [graphics] anti_aliasing / bloom: seed the SDK cvars post_aa / post_bloom
   // (both run inside the colour grade, so they follow post_grade too).
   bool anti_aliasing = true;

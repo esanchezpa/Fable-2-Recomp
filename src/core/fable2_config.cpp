@@ -334,6 +334,13 @@ ambient_occlusion = true
 # Default: true
 sun_shadows = true
 
+# Sun Shadow Map: draws the scene a second time from the sun (redrawn every
+# other frame), so nearby walls, rocks, trunks and characters
+# cast proper, stable shadows even when they are off screen; further away the
+# traced shadows above take over. Needs Sun Shadows. Costs about 5-15% of the
+# frame rate when uncapped. Default: true
+sun_shadow_map = true
+
 # Anti-Aliasing: FXAA on the final picture. Smooths the stair-stepped edges
 # that remain on leaves and grass. Part of Post-Processing. Costs under 1% FPS.
 # Default: true
@@ -583,6 +590,8 @@ bool Load(const std::filesystem::path& path) {
                                           "boolean", values.ambient_occlusion);
     values.sun_shadows = Read<bool>(graphics_table, "graphics", "sun_shadows", "boolean",
                                     values.sun_shadows);
+    values.sun_shadow_map = Read<bool>(graphics_table, "graphics", "sun_shadow_map", "boolean",
+                                       values.sun_shadow_map);
     values.anti_aliasing = Read<bool>(graphics_table, "graphics", "anti_aliasing", "boolean",
                                       values.anti_aliasing);
     values.bloom = Read<bool>(graphics_table, "graphics", "bloom", "boolean", values.bloom);
