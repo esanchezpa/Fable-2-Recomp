@@ -9,6 +9,13 @@ next to the exe, and the SDK cvar `shader_replace_dir` (seeded from
 the shader is translated, which happens at every startup (the shader cache
 stores microcode, not the result), so a rebuilt `.dxbc` needs only a restart.
 
+Shaders that read the pixel position (`GuestPixelPosition` or `RES_SCALE`)
+bake the resolution scale in, so the build script makes one file per scale
+(`<hash>.x1.dxbc`, `.x2`, `.x3`) and the SDK loads the one for the running
+`resolution_scale`, falling back to `<hash>.dxbc`. Before 2026-11-14 they
+were built for 3x only, which put screen-space lookups (water reflections,
+shadows) in the wrong place at 1x and 2x.
+
 ## Finding the shader for a surface
 
 1. Run with `--dump_shaders=<dir>` once. For every shader this writes

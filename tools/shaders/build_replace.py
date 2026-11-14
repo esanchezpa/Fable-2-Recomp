@@ -9,6 +9,10 @@ to the exe as shaders/replace at build time). Each entry in
 SHADERS is (source, defines, ucode hash): the SDK replaces the translated
 shader whose ucode hash matches the file name. See shaders/README.md for how
 hashes are found.
+
+Shaders that read the pixel position (GuestPixelPosition / RES_SCALE) bake
+the resolution scale in, so they are built once per scale as
+<hash>.x<scale>.dxbc; the SDK picks the one for the running scale.
 """
 import argparse
 import glob
@@ -38,6 +42,10 @@ SHADERS = [
 ]
 
 
+# Resolution scales the launcher offers (1x, 2x, 3x).
+SCALES = (1, 2, 3)
+
+
 def find_fxc():
     env = os.environ.get('FXC')
     if env and os.path.isfile(env):
@@ -56,17 +64,24 @@ def main():
     fxc = find_fxc()
     os.makedirs(args.out, exist_ok=True)
     for source, profile, defines, hash_ in SHADERS:
-        out = os.path.join(args.out, hash_ + '.dxbc')
-        cmd = [fxc, '/nologo', '/T', profile, '/E', 'main', '/O3',
-               '/enable_unbounded_descriptor_tables', '/Fo', out]
-        for d in defines:
-            cmd += ['/D', d]
-        cmd.append(os.path.join(SRC, source))
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode:
-            print(result.stdout, result.stderr, file=sys.stderr)
-            sys.exit(f'{source} ({defines}) failed')
-        print(f'{source:20} {",".join(defines) or "-":10} -> {out}')
+        text = open(os.path.join(SRC, source), encoding='utf-8').read()
+        scaled = 'GuestPixelPosition' in text or 'RES_SCALE' in text
+        variants = [(f'.x{n}', [f'RES_SCALE={n}.0']) for n in SCALES] if scaled else [('', [])]
+        stale = os.path.join(args.out, hash_ + '.dxbc')
+        if scaled and os.path.exists(stale):
+            os.remove(stale)
+        for suffix, extra in variants:
+            out = os.path.join(args.out, hash_ + suffix + '.dxbc')
+            cmd = [fxc, '/nologo', '/T', profile, '/E', 'main', '/O3',
+                   '/enable_unbounded_descriptor_tables', '/Fo', out]
+            for d in defines + extra:
+                cmd += ['/D', d]
+            cmd.append(os.path.join(SRC, source))
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode:
+                print(result.stdout, result.stderr, file=sys.stderr)
+                sys.exit(f'{source} ({defines + extra}) failed')
+            print(f'{source:20} {",".join(defines + extra) or "-":24} -> {out}')
 
 
 if __name__ == '__main__':
