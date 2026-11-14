@@ -63,6 +63,42 @@ class PerfSamplerContractTests(unittest.TestCase):
         self.assertIn("sampler.pending_frames = original_state.pending_frames", self.lua_test)
         self.assertIn("sampler.sampled = original_state.sampled", self.lua_test)
 
+    def test_f5_captures_sampler_loadfile_result(self):
+        # F5 must not silently discard loadfile's (chunk, err) pair: it should
+        # retain both values so a failed load can be diagnosed without guessing.
+        self.assertRegex(
+            self.f5,
+            re.compile(
+                r'local\s+\w+\s*,\s*\w+\s*=\s*loadfile\("scripts/recomp/perfSampler\.lua"\)',
+                re.I,
+            ),
+        )
+
+    def test_f5_captures_sampler_pcall_result(self):
+        # pcall's (ok, err) pair must be captured, not used only in a condition,
+        # so a compile/runtime error inside perfSampler is visible.
+        self.assertRegex(
+            self.f5,
+            re.compile(r'pcall\(\s*sampler_chunk\s*\)', re.I),
+        )
+        self.assertRegex(
+            self.f5,
+            re.compile(r'=\s*pcall\(\s*sampler_chunk\s*\)', re.I),
+        )
+
+    def test_f5_stores_load_diagnostic_global(self):
+        # The diagnostic must be published in a global that can be queried
+        # later (opt-in) without changing sampler behavior.
+        self.assertIn("__f2_f5_load_diag", self.f5)
+        self.assertRegex(
+            self.f5,
+            re.compile(r'rawset\(\s*_G\s*,\s*"__f2_f5_load_diag"', re.I),
+        )
+
+    def test_console_exposes_f5_load_diagnostic(self):
+        # There must be a console command to query the diagnostic on demand.
+        self.assertRegex(self.console, r'add\("f5diag"')
+
 
 if __name__ == "__main__":
     unittest.main()

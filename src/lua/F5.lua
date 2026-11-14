@@ -41,8 +41,27 @@ local F5_MENU_ITEMS = {
 -- Load the opt-in sampler into the shared Lua state when F5 is first used.
 -- Its persistent tick is driven by the existing F5 Update coroutine below;
 -- loading it performs no sampling and registers no additional game script.
-local sampler_chunk = loadfile("scripts/recomp/perfSampler.lua")
-if type(sampler_chunk) == "function" then pcall(sampler_chunk) end
+-- Diagnostic capture (opt-in): record why perfSampler may not be available so
+-- the cause can be queried later via "f5diag". This does not change sampler
+-- behavior; it only stores load/call results in a global.
+local sampler_load_ok = false
+local sampler_load_err = nil
+local sampler_call_ok = false
+local sampler_call_err = nil
+local sampler_chunk, load_err = loadfile("scripts/recomp/perfSampler.lua")
+if type(sampler_chunk) == "function" then
+  sampler_load_ok = true
+  sampler_call_ok, sampler_call_err = pcall(sampler_chunk)
+else
+  sampler_load_err = load_err
+end
+rawset(_G, "__f2_f5_load_diag", {
+  loadfile_ok = sampler_load_ok,
+  loadfile_err = sampler_load_err,
+  pcall_ok = sampler_call_ok,
+  pcall_err = sampler_call_err,
+  sampler_registered = type(rawget(_G, "__f2_sampler")) == "table",
+})
 local sampler_state = rawget(_G, "__f2_sampler")
 
 -- Run a script from the game VFS. The game's custom loadfile resolves paths

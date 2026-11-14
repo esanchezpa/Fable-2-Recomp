@@ -317,6 +317,23 @@ add("sampler", "sampler start [frames] | stop | status | dump  QA-only in-memory
   end
 end)
 
+add("f5diag", "f5diag  show why perfSampler did or did not load from F5 (opt-in diagnostic)", function(W)
+  local diag = rawget(_G, "__f2_f5_load_diag")
+  if type(diag) ~= "table" then
+    return out("no F5 load diagnostic yet (press F5 once in gameplay first)")
+  end
+  out("f5 load diagnostic:")
+  out("  loadfile_ok=" .. tostring(diag.loadfile_ok))
+  if diag.loadfile_err ~= nil then
+    out("  loadfile_err=" .. tostring(diag.loadfile_err))
+  end
+  out("  pcall_ok=" .. tostring(diag.pcall_ok))
+  if diag.pcall_err ~= nil then
+    out("  pcall_err=" .. tostring(diag.pcall_err))
+  end
+  out("  sampler_registered=" .. tostring(diag.sampler_registered))
+end)
+
 add("target", "target  print the entity the hero is targeting and its position", function()
   local f = dbgf("GetHeroTarget")
   if not f then return out("Debug.GetHeroTarget not available") end
