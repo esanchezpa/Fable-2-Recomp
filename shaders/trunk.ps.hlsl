@@ -27,6 +27,13 @@
 #ifndef VARIATION
 #define VARIATION 0.8
 #endif
+// AMBIENT_WARM: the game's ambient on bark is a sky-blue hemisphere term,
+//   which turns the shaded side of every trunk teal. Pull it toward a warm
+//   grey of the same brightness (light bounced off the ground and leaves)
+//   (0 = original, 1 = fully warm).
+#ifndef AMBIENT_WARM
+#define AMBIENT_WARM 0.75
+#endif
 #ifndef VARIATION_SCALE
 #define VARIATION_SCALE 6.0
 #endif
@@ -116,6 +123,10 @@ float4 main(PSInput9 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r8.y = saturate(dot(r5.xzy, r8.wyz));                                  // 34
   { float v = r8.x * r10.x; r8.y = r8.y * r8.y; r10.y = v; }             // 35
   r8.yzw = r8.y * r11.xyz + C22.xyz;                                     // 36
+  if (AMBIENT_WARM > 0.0) {
+    float l = dot(r8.yzw, float3(0.299, 0.587, 0.114));
+    r8.yzw = lerp(r8.yzw, l * float3(1.12, 1.0, 0.80), AMBIENT_WARM);
+  }
   r0.yzw = r0.yzw * r8.yzw + C20.xyz;                                    // 37
   { float3 v = r10.yyx * C87.yzx; r1.x = rcp(r9.w); r8.yzw = v; }        // 38
   { float3 v = r9.xyz * r1.x; ps = r8.w; r1.xyz = v; }                   // 39
@@ -125,6 +136,7 @@ float4 main(PSInput9 input, out uint coverage : SV_Coverage) : SV_Target0 {
     float3 tint = lerp(float3(1.10, 1.03, 0.90), float3(0.90, 0.98, 1.10), n);
     r1.xyz *= lerp(1.0, tint, VARIATION);
   }
+  float3 bark = r1.zyx;
   { float3 v = r1.zyx * r0.wzy; r8.x = r8.x * ps; r0.yzw = v; }          // 40
   r8.xyz = r1.xyz * r8.xyz;                                              // 41
   r8.xyz = r0.yzw * C27.w + r8.zyx;                                      // 42
@@ -182,6 +194,9 @@ float4 main(PSInput9 input, out uint coverage : SV_Coverage) : SV_Target0 {
   }
   { float3 v = C20.w * C26.xyz; r8.x = C26.w * r0.x; r8.yzw = v; }       // 88
   float4 o = float4(r8.yzw * r0.yzw, C15.w * r8.x);                      // 89
+#if DEBUG_VIEW == 2
+  o.xyz = bark;  // bark albedo
+#endif
 #if DEBUG_VIEW == 1
   o.xyz = Noise3(world_pos * (1.0 / VARIATION_SCALE)).xxx;
 #endif
