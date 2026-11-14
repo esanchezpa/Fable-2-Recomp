@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Fixed atlas test discovery under the documented unittest command, added a synthetic no-overwrite regression, and documented the F-04 wake test matrix and missing waiter dependency.
 - Corrected the SDK candidate mapping and recorded source, pin, license, test coverage, and Spain-compatibility limits for F-03 through F-06.
 - Ampliada la revisión de F-02 contra su parent real, la base descendiente `27a6126` y SDK HEAD; documentados predicados, dependencias, ausencia de pruebas GPU y el supuesto de altura que requiere reproducción. No se cambia la lógica ni se presume compatibilidad Spain.
 - Documentado el cotejo del commit oficial F-02 `80e0b5cf` con el SDK actual: código presente y licencia BSD-3-Clause intacta; no hay prueba unitaria dedicada ni validación runtime Spain porque game-player MCP está desconectado.

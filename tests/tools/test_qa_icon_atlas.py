@@ -1,14 +1,25 @@
+import importlib.util
 import struct
+import sys
+import tempfile
 import unittest
 import zlib
+from pathlib import Path
 
-from tools.qa_icon_atlas import (
-    find_sidecar_entry,
-    parse_gui_bank,
-    parse_sidecar,
-    source_matches_sidecar,
-    tiled_a2_to_rgba,
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location(
+    "qa_icon_atlas", ROOT / "tools" / "qa_icon_atlas.py"
 )
+qa_icon_atlas = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = qa_icon_atlas
+SPEC.loader.exec_module(qa_icon_atlas)
+
+audit_atlas = qa_icon_atlas.audit_atlas
+find_sidecar_entry = qa_icon_atlas.find_sidecar_entry
+parse_gui_bank = qa_icon_atlas.parse_gui_bank
+parse_sidecar = qa_icon_atlas.parse_sidecar
+source_matches_sidecar = qa_icon_atlas.source_matches_sidecar
+tiled_a2_to_rgba = qa_icon_atlas.tiled_a2_to_rgba
 
 
 def make_gui_bank(entries, clean_deflate_end=True):
@@ -55,6 +66,46 @@ def tiled_fixture(width, height, pixels):
 
 
 class QaIconAtlasTests(unittest.TestCase):
+    def test_synthetic_atlas_audit_writes_evidence_without_overwriting_it(self):
+        texture_name = r"Art\GUI\Persistant\abyx.tex"
+        texture_payload = tiled_fixture(64, 64, {(0, 0): (255, 1, 2, 3)})
+        metadata = bytearray(24)
+        struct.pack_into(">I", metadata, 12, 0xA2)
+        struct.pack_into(">II", metadata, 16, 64, 64)
+        texture_bank = make_gui_bank([(texture_name, texture_payload)])
+        bank_entry = parse_gui_bank(texture_bank)[texture_name.lower()]
+        header_bank = make_gui_bank([(texture_name, bytes(metadata))])
+        sidecar = make_sidecar(
+            [("data/art/gui/gui_textures.bnk", bank_entry.offset, texture_payload, texture_payload)]
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            game_root = root / "game"
+            gui = game_root / "data" / "art" / "gui"
+            gui.mkdir(parents=True)
+            (gui / "gui_textures.bnk").write_bytes(texture_bank)
+            (gui / "gui_texture_headers.bnk").write_bytes(header_bank)
+            (game_root / "keyboard_prompts.bin").write_bytes(sidecar)
+            evidence = root / "evidence"
+
+            result = audit_atlas(game_root, evidence, texture_name)
+
+            self.assertEqual(result["dimensions"], [64, 64])
+            self.assertTrue(result["source_matches_sidecar_original"])
+            outputs = [Path(path) for path in result["images"].values()]
+            self.assertEqual(len(outputs), 3)
+            self.assertTrue(all(path.is_file() for path in outputs))
+            self.assertTrue(
+                all(path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n") for path in outputs)
+            )
+            originals = [path.read_bytes() for path in outputs]
+
+            with self.assertRaises(FileExistsError):
+                audit_atlas(game_root, evidence, texture_name)
+
+            self.assertEqual([path.read_bytes() for path in outputs], originals)
+
     def test_sidecar_selects_original_and_keyboard_variants_by_bank_offset(self):
         original = b"orig"
         keyboard = b"keys"
