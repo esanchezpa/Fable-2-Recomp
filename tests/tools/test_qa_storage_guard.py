@@ -19,6 +19,25 @@ SPEC.loader.exec_module(guard)
 
 class StoragePolicyTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_managed_storage_counts_rexglue_sdk_build_output(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            base = Path(temporary)
+            repository = base / "repo"
+            sdk_output = repository / "thirdparty" / "rexglue-sdk" / "out"
+            managed = base / "managed"
+            sdk_output.mkdir(parents=True)
+            managed.mkdir()
+            (sdk_output / "runtime.lib").write_bytes(b"sdk output")
+            (managed / "evidence.csv").write_bytes(b"managed evidence")
+
+            self.assertEqual(
+                guard.managed_storage_bytes(managed, repository),
+                len(b"sdk output") + len(b"managed evidence"),
+            )
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
     def test_gameplay_launch_targets_only_managed_copy_and_selects_backend(self):
         fixture_root = Path("D:/QA-Storage/guard-tests")
         fixture_root.mkdir(parents=True, exist_ok=True)

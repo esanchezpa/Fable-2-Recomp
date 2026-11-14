@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Incluido `thirdparty/rexglue-sdk/out` en el presupuesto de almacenamiento administrado y añadida una prueba de regresión; las builds del SDK ya no quedan fuera del límite del guard.
 - Completed the F5 sampler integration contract: F5 loads and ticks it only when armed/active; console commands request a delayed start, stop, inspect status, or dump after the window. Ring overwrite/sample counters are exposed. Added source-contract tests; in-game runtime and overhead remain unverified.
 - Added an opt-in bounded Lua sampler with frame-window auto-stop and an existing F5-loop tick hook; documented guarded QA RED/GREEN evidence and the remaining runtime and overhead gates.
 - Recorded the 2026-11-14 guarded VFS retry: the clone did not reach verified QA gameplay, so no sampler runtime result is claimed; temporary files were restored and all 40 clone saves still match the witness clone.

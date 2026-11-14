@@ -123,12 +123,13 @@ def _directory_size(path: Path) -> int:
 def managed_storage_bytes(root: Path | str, repo_root: Path | str) -> int:
     managed = validate_managed_root(root)
     repo = Path(repo_root).resolve(strict=True)
-    out = repo / "out"
     candidates = [managed]
-    if out.exists():
-        if out.drive.lower() != "d:":
-            raise GuardError(f"Build output must be on D:, got {out}")
-        candidates.append(out.resolve(strict=True))
+    build_outputs = [repo / "out", repo / "thirdparty" / "rexglue-sdk" / "out"]
+    for out in build_outputs:
+        if out.exists():
+            if out.drive.lower() != "d:":
+                raise GuardError(f"Build output must be on D:, got {out}")
+            candidates.append(out.resolve(strict=True))
     # Avoid double-counting if a future layout nests one managed path in another.
     unique: list[Path] = []
     for candidate in candidates:
