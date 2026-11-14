@@ -261,6 +261,7 @@ Controls the fit-window module (`src/core/fable2_fit_window.h`), which renders a
 |---|---|---|---|
 | `pad` | `pad <A\|B\|X\|Y\|LB\|RB\|LT\|RT\|Up\|Down\|Left\|Right\|Start\|Back\|L3\|R3>[+...] [frames]` | Presses guest buttons through a synthetic gamepad, held for frames (default 12), then released. `+` combines inputs (`pad LB+A`). | Works without window focus. The command queue waits while it is held, so `pad Down; pad A` are two presses. |
 | `pad stick` | `pad stick <lx> <ly> [frames]` | Holds the left stick (-32768..32767, ly positive = forward). | |
+| `pad look` | `pad look <rx> <ry> [frames]` | Holds the right stick (turns the camera). | |
 | `pad off` | `pad off` | Releases everything now. | |
 
 Example `console\autoexec.txt` that gets from boot to in-game with the last save (timings depend on the machine):

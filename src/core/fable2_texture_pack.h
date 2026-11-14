@@ -67,6 +67,15 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
   seed("post_sun_map", cfg.sun_shadow_map ? "true" : "false");
   seed("post_aa", cfg.anti_aliasing ? "true" : "false");
   seed("post_bloom", cfg.bloom ? "true" : "false");
+  // Ultra (Sparrow Edition): heavier versions of the settings above.
+  if (cfg.ultra) {
+    seed("post_light_shafts", "true");
+    seed("post_sun_map_interval", "1");
+    seed("post_sun_map_size", "4096");
+    seed("post_sun_map_radius", "180");
+    seed("post_ao_strength", "0.75");
+    seed("post_grade_dehaze_far", "0.3");
+  }
   // Startup only: the SDK swaps shaders in when it translates them. Next to
   // the exe, not the working directory: the launcher starts the game in the
   // player's data folder.

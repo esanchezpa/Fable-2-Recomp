@@ -251,6 +251,10 @@ struct Values {
   // [graphics] sun_shadow_map: seeds the SDK cvar post_sun_map (the depth
   // pre-pass redrawn from the sun; needs sun_shadows).
   bool sun_shadow_map = true;
+  // [graphics] ultra: the Sparrow Edition tier. Seeds heavier SDK settings on
+  // top of the ones above (light shafts, a sharper and wider sun shadow map
+  // redrawn every frame, stronger AO); see fable2_texture_pack.h.
+  bool ultra = false;
   // [graphics] anti_aliasing / bloom: seed the SDK cvars post_aa / post_bloom
   // (both run inside the colour grade, so they follow post_grade too).
   bool anti_aliasing = true;

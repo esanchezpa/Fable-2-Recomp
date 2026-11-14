@@ -1013,14 +1013,14 @@ inline bool run_host_command(const std::string& line, uint8_t* base) {
   }
   if (name == "pad") {
     // pad <A|B|X|Y|LB|RB|LT|RT|Up|Down|Left|Right|Start|Back|L3|R3>[+...] [frames]
-    // pad stick <lx> <ly> [frames]  (-32768..32767, ly + = forward)  |  pad off
+    // pad stick <lx> <ly> [frames]  (-32768..32767, ly + = forward)  |  pad look <rx> <ry> [frames]  |  pad off
     // Holds the input for frames (default 12: menus miss 6), then releases it. While held
     // the command queue waits, so "pad A; pad Down; pad A" are separate presses.
     static const std::pair<const char*, uint16_t> kBtn[] = {
         {"up", 0x0001}, {"down", 0x0002}, {"left", 0x0004}, {"right", 0x0008}, {"start", 0x0010},
         {"back", 0x0020}, {"l3", 0x0040}, {"r3", 0x0080}, {"lb", 0x0100}, {"rb", 0x0200},
         {"a", 0x1000}, {"b", 0x2000}, {"x", 0x4000}, {"y", 0x8000}};
-    if (W.size() < 2) return out("pad", "usage: pad <button>[+button] [frames] | pad stick <lx> <ly> [frames] | pad off", true), true;
+    if (W.size() < 2) return out("pad", "usage: pad <button>[+button] [frames] | pad stick <lx> <ly> [frames] | pad look <rx> <ry> [frames] | pad off", true), true;
     fable2::remote::InputSnapshot snap;
     size_t fi = 2;
     std::string what = W[1];
@@ -1059,6 +1059,13 @@ inline bool run_host_command(const std::string& line, uint8_t* base) {
       if (W.size() < 4 || !parse_i(W[2], lx) || !parse_i(W[3], ly)) return out("pad", "usage: pad stick <lx> <ly> [frames]", true), true;
       snap.stk_lx = static_cast<int32_t>(std::clamp<int64_t>(lx, -32768, 32767));
       snap.stk_ly = static_cast<int32_t>(std::clamp<int64_t>(ly, -32768, 32767));
+      fi = 4;
+    } else if (what == "look") {
+      // pad look <rx> <ry> [frames]: hold the right stick (turns the camera).
+      int64_t rx = 0, ry = 0;
+      if (W.size() < 4 || !parse_i(W[2], rx) || !parse_i(W[3], ry)) return out("pad", "usage: pad look <rx> <ry> [frames]", true), true;
+      snap.stk_rx = static_cast<int32_t>(std::clamp<int64_t>(rx, -32768, 32767));
+      snap.stk_ry = static_cast<int32_t>(std::clamp<int64_t>(ry, -32768, 32767));
       fi = 4;
     } else {
       std::stringstream ss(what);

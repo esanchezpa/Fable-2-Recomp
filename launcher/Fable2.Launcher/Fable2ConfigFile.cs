@@ -42,6 +42,8 @@ public class Fable2ConfigValues
     // [graphics] texture_pack: Modern graphics (the texture pack, filtering, grade
     // and shader rewrites). The launcher turns it off while the pack downloads.
     public bool TexturePack { get; set; } = true;
+    // [graphics] ultra: the Sparrow Edition tier (set with the edition).
+    public bool Ultra { get; set; } = false;
 
     public int HotFuncYieldEvery { get; set; } = 1;  // 1 = original, 0 = never yield
 }
@@ -136,6 +138,7 @@ public static class Fable2ConfigFile
                     break;
                 case "graphics":
                     if (key == "texture_pack") values.TexturePack = ParseBool(rawValue, values.TexturePack);
+                    else if (key == "ultra") values.Ultra = ParseBool(rawValue, values.Ultra);
                     break;
             }
         }
@@ -180,6 +183,7 @@ public static class Fable2ConfigFile
             ("patches", "hero_dog_texture_readback", values.HeroDogTextureReadback ? "true" : "false"),
             ("perf", "hotfunc_yield_every", values.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture)),
             ("graphics", "texture_pack", values.TexturePack ? "true" : "false"),
+            ("graphics", "ultra", values.Ultra ? "true" : "false"),
         };
 
         var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

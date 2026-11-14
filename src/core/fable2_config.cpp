@@ -341,6 +341,12 @@ sun_shadows = true
 # frame rate when uncapped. Default: true
 sun_shadow_map = true
 
+# Ultra: the Sparrow Edition look, on top of the settings above. Light shafts
+# through the trees when facing the sun, a sharper and wider sun shadow map
+# redrawn every frame, stronger contact shading and a clearer far distance.
+# Costs about 5-10% of the frame rate when uncapped. Default: false
+ultra = false
+
 # Anti-Aliasing: FXAA on the final picture. Smooths the stair-stepped edges
 # that remain on leaves and grass. Part of Post-Processing. Costs under 1% FPS.
 # Default: true
@@ -592,6 +598,7 @@ bool Load(const std::filesystem::path& path) {
                                     values.sun_shadows);
     values.sun_shadow_map = Read<bool>(graphics_table, "graphics", "sun_shadow_map", "boolean",
                                        values.sun_shadow_map);
+    values.ultra = Read<bool>(graphics_table, "graphics", "ultra", "boolean", values.ultra);
     values.anti_aliasing = Read<bool>(graphics_table, "graphics", "anti_aliasing", "boolean",
                                       values.anti_aliasing);
     values.bloom = Read<bool>(graphics_table, "graphics", "bloom", "boolean", values.bloom);

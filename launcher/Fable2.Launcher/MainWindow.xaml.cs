@@ -472,6 +472,7 @@ public partial class MainWindow : Window
         }
         finally { _loading = false; }
         _home.Settings.Edition = edition.Id;
+        _recomp.Ultra = edition.Ultra;
         if (!edition.ModernGraphics || !TexturesHalfInstalled) SetModernGraphics(edition.ModernGraphics);
         string name = edition == Edition.Sparrow ? edition.Name : edition.Name + " edition";
         if (SaveAll())
