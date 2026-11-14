@@ -278,6 +278,45 @@ add("info", "info  hero position, level, time of day, game time, target", functi
   try("target", dbgf("GetHeroTarget"))
 end)
 
+add("sampler", "sampler start [frames] | stop | status | dump  QA-only in-memory hero-position sampler", function(W)
+  local sampler = rawget(_G, "__f2_sampler")
+  if type(sampler) ~= "table" then return out("sampler unavailable (press F5 once in gameplay first)") end
+
+  local operation = (W[2] or "status"):lower()
+  if operation == "start" then
+    local frames = W[3] and tonumber(W[3]) or nil
+    if W[3] and not frames then return out("invalid frame window") end
+    if sampler.request_start(frames) then
+      out("sampler armed; delay=" .. tostring(sampler.pending_frames)
+          .. " frames; close the console and remain in loaded gameplay")
+    else
+      out("sampler start rejected (already running or invalid frame window)")
+    end
+  elseif operation == "stop" then
+    out(sampler.stop() and "sampler stopped" or "sampler was not running")
+  elseif operation == "status" then
+    local status = sampler.enabled and "ON"
+        or (sampler.pending_frames > 0 and "ARMED" or "OFF")
+    out("sampler " .. status
+        .. ", frames=" .. tostring(sampler.frame)
+        .. ", pending=" .. tostring(sampler.pending_frames)
+        .. ", stored=" .. tostring(sampler.ring:count())
+        .. ", sampled=" .. tostring(sampler.sampled)
+        .. ", dropped=" .. tostring(sampler.dropped)
+        .. ", overwritten=" .. tostring(sampler.ring:overwritten()))
+  elseif operation == "dump" then
+    local rows, dropped, overwritten, sampled = sampler.dump()
+    if not rows then return out("stop sampler before dumping") end
+    out("sampler dump: sampled=" .. tostring(sampled) .. ", stored=" .. #rows
+        .. ", dropped=" .. tostring(dropped) .. ", overwritten=" .. tostring(overwritten))
+    for _, row in ipairs(rows) do
+      out(string.format("sample,%d,%.6f,%.6f,%.6f", row.frame, row.x, row.y, row.z))
+    end
+  else
+    out("usage: sampler start [frames] | stop | status | dump")
+  end
+end)
+
 add("target", "target  print the entity the hero is targeting and its position", function()
   local f = dbgf("GetHeroTarget")
   if not f then return out("Debug.GetHeroTarget not available") end

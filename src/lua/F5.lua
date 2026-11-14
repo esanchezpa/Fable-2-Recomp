@@ -38,6 +38,13 @@ local F5_MENU_ITEMS = {
   { name = "Toggle Freecam", path = "scripts/recomp/toggleFreecam.lua" },
 }
 
+-- Load the opt-in sampler into the shared Lua state when F5 is first used.
+-- Its persistent tick is driven by the existing F5 Update coroutine below;
+-- loading it performs no sampling and registers no additional game script.
+local sampler_chunk = loadfile("scripts/recomp/perfSampler.lua")
+if type(sampler_chunk) == "function" then pcall(sampler_chunk) end
+local sampler_state = rawget(_G, "__f2_sampler")
+
 -- Run a script from the game VFS. The game's custom loadfile resolves paths
 -- relative to the data/ root (io is disabled), so there is no "data/" prefix.
 -- Returns (chunk, nil) on success or (nil, msg) when not found / compile error.
@@ -174,7 +181,18 @@ if not st.registered then
       return false
     end
     while true do
-      if not modal_clear() then
+      local modal_is_clear = modal_clear()
+      if type(sampler_state) == "table" and sampler_state.enabled then
+        if st.busy or st.show or not modal_is_clear then
+          sampler_state.stop()
+        else
+          sampler_state.tick()
+        end
+      elseif type(sampler_state) == "table" and sampler_state.pending_frames > 0
+          and not st.busy and not st.show and modal_is_clear and cooldown == 0 then
+        sampler_state.tick_pending()
+      end
+      if not modal_is_clear then
         -- A native box is still up/tearing down: drop F5, wait.
       elseif cooldown > 0 then
         -- The game's menu box needs a few frames to fully tear down after a
