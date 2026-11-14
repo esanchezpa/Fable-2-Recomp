@@ -518,6 +518,7 @@
   6. Si se necesita captura de dump, usar CDB sobre el proceso QA con la misma variación de PATH, sin cambiar configuración global.
   7. Esta prueba no requiere navegación visual ni gameplay; solo verifica estabilidad de arranque.
 - **Gate:** la correlación es fuerte (3 cierres + A/B), pero no se afirma causa raíz definitiva sin dump/stack. El arranque sin RenderDoc es estable ≥60 s. No se modificó el sistema, los saves ni el clon. El diagnóstico `f5diag` sigue pendiente de una corrida que alcance gameplay.
+- **Handoff visual:** la validación de `f5diag` y sampler en gameplay requiere navegación visual confirmada. Se solicitó handoff a coordinador Luna (GPT-6 medium build) con secuencia completa documentada. El trabajo no visual (evidencia RenderDoc, prueba controlada, código f5diag) está completo y commiteado.
 
 ## 55. Validación de gameplay y sampler en el clon QA (2026-11-14, intento con pad de consola)
 - **Método:** se lanzó el clon QA bajo `qa_storage_guard.py` (run `20261114T155121Z-16332-dea4fc71`, timeout 300 s, terminado por deadline del observador a los 280 s). Se usó el pad de consola (`pad a/down`) en lugar del teclado host para sortear el bloqueo de foco del driver `keyboard_gamepad`. El observador pasivo confirmó HWND visible y foreground del juego en la sesión interactiva.
