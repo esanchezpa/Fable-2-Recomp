@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Matched the 11:01:23 WER fast-fail to guarded run `20261114T160002Z-40544-4272598a`; documented the later observer-deadline runs, Release F5 logging limitation, and verified QA save/manifest restoration without attributing the crash to Lua or the sampler.
 - Reached gameplay via console pad navigation and confirmed the max-saves dialog blocks Continue; F5 via window_post crashed the process; sampler remains unavailable; restored all 40 saves and clone state.
 - Reached QA gameplay through console pad navigation (title -> Continue -> load save -> Old Bowerstone) and opened the F5 menu; sampler stayed unavailable after F5, so arming, movement, dump, and overhead remain unverified; restored clone state and all 40 saves.
 - Added concurrent passive Win32 PID/HWND/session/focus observation for the guarded QA clone, confirming a visible foreground game window during life of the process; title navigation still did not reach the menu, so sampler activation and overhead remain unverified.
