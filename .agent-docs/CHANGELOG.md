@@ -9,6 +9,7 @@
 - Added guarded build/gameplay entry points and regression coverage for managed QA roots, storage limits, bounded traces, and child-process lifetime.
 - Routed build.cmd through the supervisor and added a dedicated launcher for copied QA gameplay trees; build Python selection remains process-local.
 - Added an S3 replay planner and QPC-window trace summarizer with bounded, source-level test coverage; these tools do not certify a safe route or FPS/display rate.
+- Updated package-release fixtures to expect the already-bundled keycap font and its license in the archive.
 
 ### Fixed
 - Sincronizado el stub de `poll_f5` del test nativo con el parámetro `focused` de la interfaz real.
