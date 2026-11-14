@@ -11,6 +11,7 @@
 - Added an S3 replay planner and QPC-window trace summarizer with bounded, source-level test coverage; these tools do not certify a safe route or FPS/display rate.
 - Updated package-release fixtures to expect the already-bundled keycap font and its license in the archive.
 - Aligned the native keyboard/gamepad test stub with the focused `poll_f5(bool)` interface.
+- Recorded passing guarded native tests and incremental Release link with the installed MSVC 14.44 toolset; the sampler VFS/runtime and campaign-performance gates remain open.
 
 ### Fixed
 - Sincronizado el stub de `poll_f5` del test nativo con el parámetro `focused` de la interfaz real.
