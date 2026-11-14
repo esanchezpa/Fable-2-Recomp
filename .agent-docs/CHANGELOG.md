@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Changed
+- Added symbol-backed evidence for a first-chance AV during startup (invalid write in the Fable render loop), while documenting the ntdll symbol mismatch, repeated first-chance handler/log flood, guarded timeout, and that no fatal gameplay AV/root cause was established.
+- Recorded the guarded profiler/CDB gameplay run: matching private PDB symbols loaded, the save reached gameplay, only first-chance access violations were logged, no crash dump or unhandled failure occurred before the 540-second watchdog, and the QA executable, manifest, and all 40 saves were restored/verified.
+- Documented the guarded menu-navigation diagnosis: the game window was focused, `E` mapped to A, `Down` did not move the menu, `S` (StickDown) selected Continue, and the existing save reached gameplay; all 40 QA save hashes remained unchanged.
+- Recorded the profiler/CDB capture timing out at the title screen, restored the disposable QA clone from preserved pre-run files, and verified all 40 save hashes unchanged; no crash dump or causal finding was available.
 - Documented the guarded no-sampler/no-trace CDB launch: it captured a second-chance AV but no fast-fail, exposed a Release PDB/QA EXE identity mismatch, and preserved all 40 saves; the A/B and root cause remain unproven.
 - Recorded why the historical no-sampler QA clone is not a causal baseline and the CDB availability blocker; traced and fixed the PE version-resource helper's unclosed DLL handles, with a regression test and clean full-suite run.
 - Recorded the safe D:-only GOTY Spain launch-root verification, preserved a guarded fast-fail investigation, and documented that the sampler/movement gates remain unverified.
