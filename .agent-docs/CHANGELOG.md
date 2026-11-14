@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Añadido al informe QA el análisis offline de ambos minidumps con CDB/WinDbg oficial, el contexto de excepción y las limitaciones de atribución; no se aplica un parche sin causa raíz demostrada.
+
 ### Added
 - Incluido `thirdparty/rexglue-sdk/out` en el presupuesto de almacenamiento administrado y añadida una prueba de regresión; las builds del SDK ya no quedan fuera del límite del guard.
 - Registrada la revalidación QA del sampler del 2026-11-14: el clon cargó el save existente, pero dos procesos terminaron con excepciones nativas antes de obtener un resultado actual verificable del sampler; los 40 saves permanecen iguales al testigo.
