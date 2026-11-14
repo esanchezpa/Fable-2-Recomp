@@ -95,6 +95,14 @@ class PerfSamplerContractTests(unittest.TestCase):
             re.compile(r'rawset\(\s*_G\s*,\s*"__f2_f5_load_diag"', re.I),
         )
 
+    def test_persistent_update_resolves_sampler_from_global_each_frame(self):
+        # F5's updater survives later F5 chunk evaluations. Resolve the sampler
+        # inside that persistent updater so a sampler published by a later
+        # evaluation is not missed by a stale local captured on first load.
+        update = re.search(r"local function update\(\)(.*?)\n  end\n\n  local menutab", self.f5, re.S)
+        self.assertIsNotNone(update)
+        self.assertRegex(update.group(1), r'rawget\(\s*_G\s*,\s*"__f2_sampler"\s*\)')
+
     def test_console_exposes_f5_load_diagnostic(self):
         # There must be a console command to query the diagnostic on demand.
         self.assertRegex(self.console, r'add\("f5diag"')

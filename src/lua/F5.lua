@@ -62,8 +62,6 @@ rawset(_G, "__f2_f5_load_diag", {
   pcall_err = sampler_call_err,
   sampler_registered = type(rawget(_G, "__f2_sampler")) == "table",
 })
-local sampler_state = rawget(_G, "__f2_sampler")
-
 -- Run a script from the game VFS. The game's custom loadfile resolves paths
 -- relative to the data/ root (io is disabled), so there is no "data/" prefix.
 -- Returns (chunk, nil) on success or (nil, msg) when not found / compile error.
@@ -201,6 +199,9 @@ if not st.registered then
     end
     while true do
       local modal_is_clear = modal_clear()
+      -- Resolve this each frame: a later F5 evaluation may successfully load
+      -- the sampler after this persistent updater was first registered.
+      local sampler_state = rawget(_G, "__f2_sampler")
       if type(sampler_state) == "table" and sampler_state.enabled then
         if st.busy or st.show or not modal_is_clear then
           sampler_state.stop()
