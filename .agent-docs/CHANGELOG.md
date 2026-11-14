@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Documented the guarded no-sampler/no-trace CDB launch: it captured a second-chance AV but no fast-fail, exposed a Release PDB/QA EXE identity mismatch, and preserved all 40 saves; the A/B and root cause remain unproven.
 - Recorded why the historical no-sampler QA clone is not a causal baseline and the CDB availability blocker; traced and fixed the PE version-resource helper's unclosed DLL handles, with a regression test and clean full-suite run.
 - Recorded the safe D:-only GOTY Spain launch-root verification, preserved a guarded fast-fail investigation, and documented that the sampler/movement gates remain unverified.
 - Documented the verified MSVC 14.51/14.44 linker mismatch and successful guarded Release build using process-local MSVC 14.44 and staged Windows SDK paths.
