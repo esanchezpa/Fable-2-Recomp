@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Ampliada la revisión de F-02 contra su parent real, la base descendiente `27a6126` y SDK HEAD; documentados predicados, dependencias, ausencia de pruebas GPU y el supuesto de altura que requiere reproducción. No se cambia la lógica ni se presume compatibilidad Spain.
 - Documentado el cotejo del commit oficial F-02 `80e0b5cf` con el SDK actual: código presente y licencia BSD-3-Clause intacta; no hay prueba unitaria dedicada ni validación runtime Spain porque game-player MCP está desconectado.
 - Añadido al informe QA el análisis offline de ambos minidumps con CDB/WinDbg oficial, el contexto de excepción y las limitaciones de atribución; no se aplica un parche sin causa raíz demostrada.
 - Documentada la comparación QA OFF/ON con watchdog y protección hash de los 40 saves; una AV `0xC0000005` ocurrió cerca de F5 en la corrida ON, pero sin dump ni control F5 OFF válido no se atribuye a una causa ni se aplica un parche.
