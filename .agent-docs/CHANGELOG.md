@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- Recorded why the historical no-sampler QA clone is not a causal baseline and the CDB availability blocker; traced and fixed the PE version-resource helper's unclosed DLL handles, with a regression test and clean full-suite run.
 - Recorded the safe D:-only GOTY Spain launch-root verification, preserved a guarded fast-fail investigation, and documented that the sampler/movement gates remain unverified.
 - Documented the verified MSVC 14.51/14.44 linker mismatch and successful guarded Release build using process-local MSVC 14.44 and staged Windows SDK paths.
 - Identified the verified F-06 source in gitgudscrub/Fable-2-Recomp, added a pure-Python parser and 12 contract tests for shader_prebuild.txt, and updated the QA report; no runtime, SDK pin, assets or game data were changed.

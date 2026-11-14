@@ -1,11 +1,13 @@
 """Check that add_version_resource.py grafts version info into a DLL, using fake PE files."""
 import contextlib
+import gc
 import importlib.util
 import io
 from pathlib import Path
 import struct
 import tempfile
 import unittest
+import warnings
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -167,6 +169,17 @@ class AddVersionResourceTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertIn(RT_VERSION, resource_types(pe))
+
+    def test_closes_dll_file_handles(self):
+        self.path.write_bytes(build_pe({RT_MANIFEST: MANIFEST}))
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            version_resource.add_version_resource(str(self.path), FIELDS)
+            gc.collect()
+
+        leaked = [warning for warning in caught if issubclass(warning.category, ResourceWarning)]
+        self.assertEqual(leaked, [])
 
     def test_version_resource_holds_the_given_fields(self):
         _, pe = self.add(build_pe({RT_MANIFEST: MANIFEST}))

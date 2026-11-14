@@ -174,7 +174,8 @@ def _build_rsrc(leaves):
 
 
 def add_version_resource(dll, fields, log=lambda *a: None):
-    buf = bytearray(open(dll, "rb").read())
+    with open(dll, "rb") as f:
+        buf = bytearray(f.read())
     pe = e_lfanew(buf)
     dd, secs, file_align = read_sections(buf, pe)
     res_rva, _ = struct.unpack_from("<II", buf, dd + 16)  # data dir index 2 = resources
@@ -233,7 +234,8 @@ def add_version_resource(dll, fields, log=lambda *a: None):
             struct.pack_into("<I", new_buf, s["off"] + 8, len(new_content))
             struct.pack_into("<I", new_buf, s["off"] + 16, new_rsize)
     struct.pack_into("<II", new_buf, dd + 16, res_sec["vaddr"], len(new_content))
-    open(dll, "wb").write(new_buf)
+    with open(dll, "wb") as f:
+        f.write(new_buf)
     log(f"  {res_sec['name'].decode()}: added RT_VERSION ({len(leaves)} leaves, "
         f".rsrc now {len(new_content)} bytes)")
     return True
