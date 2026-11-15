@@ -94,6 +94,9 @@
 #if SPARROW
 #include "sparrow_common.hlsli"
 #endif
+#ifndef SPARROW_SKY_REFLECT
+#define SPARROW_SKY_REFLECT 1.0
+#endif
 
 #define C0 K[0]
 #define C8 K[1]
@@ -300,8 +303,35 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   if (SparrowActive()) r2.xyz = SparrowAmbient(r2.xyz, input.v2.xyz, r9.zyx, C87.xyz, sky_vis);
 #endif
   { float3 v = r8.ywz * r5.xzy; r12.z = C87.z * r6.w; r5.xyz = v; }      // 53
+  float3 sparrow_spec = 0.0;
+#if SPARROW
+  if (SparrowActive() && !(xe_flags & 0x80000000u)) {
+    // Scenery only (characters keep the game's sheen and the skin terms):
+    // the sun's GGX lobe with the game's specular map as F0 (floored at the
+    // 4% of stone), shadowed as the diffuse is, in place of (V.R)^4, plus
+    // the sky's reflection at grazing angles unless the material has its
+    // own reflection cube (b134). As lit4.ps.hlsl (Command Hub f20,
+    // option 1).
+    float3 n = r9.zyx, v = r10.xyz;
+    float spec_lum = dot(r8.yzw, float3(0.2126, 0.7152, 0.0722));
+    float rough = lerp(0.75, 0.35, saturate(spec_lum * 4.0));
+    float3 base = 0.0, grazing = 0.0;
+    SparrowSpecularSplit(n, v, C80.xyz, rough, C87.xyz * dbg_shadow, base, grazing);
+    sparrow_spec = base * max(r8.yzw, SPARROW_F0) + grazing;
+    r5.xyz = 0.0;
+    if (!XeBool(134))
+      sparrow_spec += r2.xyz * C27.w * SparrowEnvSpecular(n, v, rough, max(spec_lum, SPARROW_F0)) * SPARROW_SKY_REFLECT;
+  }
+#endif
   r12.xyz *= skin_tint;
   r6.xyz = r12.xyz * r11.zyx + r5.xzy;                                   // 54
+  r6.xyz += sparrow_spec;
+#if SPARROW
+  if (SparrowDebug() == 2 && SparrowActive() && !(xe_flags & 0x80000000u)) {
+    r6.xyz = sparrow_spec;
+    r7.xyz = 0.0;
+  }
+#endif
   r2.xyz = r7.xyz * r2.xyz + r6.xyz;                                     // 55
   if (XeBool(133)) {
     r6.xyz = TF13(r0.xy).xyz;                                            // 56

@@ -55,6 +55,9 @@
 #if SPARROW
 #include "sparrow_common.hlsli"
 #endif
+#ifndef SPARROW_SKY_REFLECT
+#define SPARROW_SKY_REFLECT 1.0
+#endif
 
 #define C0 K[0]
 #define C8 K[1]
@@ -228,6 +231,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float3 v = r12.xyz * C21.xyz; r6.x = r6.x * r6.x; r12.xyz = v; }     // 47
   r5.xyz = r6.x * r13.xyz + C22.xyz;                                     // 48
   r5.xyz = r12.xyz * r5.xyz + C20.xyz;                                   // 49
+  float3 ambient = r5.xyz;  // Sparrow: the ambient light, before the albedo
   r5.xyz = r7.xyz * r5.xyz;                                              // 50
   if (XeBool(135)) {
     r14 = float4(C254.x == 0.0 ? r2.z : C254.y, C254.x == 0.0 ? r2.x : C254.y,
@@ -261,6 +265,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float v = C254.y - r6.y; r6.y = rsqrt(abs(r6.w)); r2.z = v; }        // 76
   { float3 v = r7.xyz * r6.y; r6.y = rsqrt(abs(r0.w)); r13.xyz = v; }    // 77
   { float3 v = r2.xyw * r6.y; r6.w = sqrt(abs(r6.w)); r7.yzw = v; }      // 78
+  float3 l0 = r7.yzw, l1 = r13.xyz;  // Sparrow: toward the lights (world)
   r12.xy = saturate(-r6.xw * C96.xy + C254.y);                           // 79
   r6.x = dot(r7.wyz, C98.zxy);                                           // 80
   r12.z = dot(r9.xzy, r7.wyz);                                           // 81
@@ -282,11 +287,34 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float v = r7.x * r12.w; r13.x = C88.x * r6.w; r12.z = v; }           // 97
   { float2 v = r12.yz * r12.wy; r13.y = C88.y * r6.w; r7.zw = v; }       // 98
   { float2 v = r7.yz * r2.zx; r13.z = C88.z * r6.w; r6.xy = v; }         // 99
+  // Sparrow: each light's diffuse factor (shadow, range, cone) without N.L.
+  float light0 = r6.y / max(r2.x, 1e-3), light1 = r6.w / max(r2.y, 1e-3);
   r2.xyz = r6.y * C87.xyz + r13.xyz;                                     // 100
   r6.x = r6.x * r12.x;                                                   // 101
   r6.xyz = r6.x * C88.xyz;                                               // 102
   r6.xyz = r7.w * C87.xyz + r6.xyz;                                      // 103
+  float3 sparrow_spec = 0.0;
+#if SPARROW
+  if (SparrowActive() && !(xe_flags & 0x80000000u)) {
+    // GGX for both lights with the game's specular map as F0 (floored at
+    // 4%), in place of (V.R)^4, plus the sky's reflection at grazing angles
+    // unless the material has its own reflection cube (b134). As
+    // lit.ps.hlsl / lit4.ps.hlsl.
+    float3 n = r9.zyx, v = r10.xyz;
+    float spec_lum = dot(r11.xyz, float3(0.2126, 0.7152, 0.0722));
+    float rough = lerp(0.75, 0.35, saturate(spec_lum * 4.0));
+    float3 base = 0.0, grazing = 0.0;
+    SparrowSpecularSplit(n, v, l0, rough, C87.xyz * light0, base, grazing);
+    SparrowSpecularSplit(n, v, l1, rough, C88.xyz * light1, base, grazing);
+    sparrow_spec = base * max(r11.xyz, SPARROW_F0) + grazing;
+    r6.xyz = 0.0;
+    if (!XeBool(134))
+      sparrow_spec += ambient * C27.w * SparrowEnvSpecular(n, v, rough, max(spec_lum, SPARROW_F0)) * SPARROW_SKY_REFLECT;
+    if (SparrowDebug() == 2) { r5.xyz = 0.0; r2.xyz = 0.0; }
+  }
+#endif
   r6.xyz = r11.xyz * r6.xyz + r5.xyz;                                    // 104
+  r6.xyz += sparrow_spec;
   r2.xyz = r2.xyz * r8.yzw + r6.xyz;                                     // 105
   if (XeBool(133)) {
     r6.xyz = TF13(r0.xy).xyz;                                            // 106
