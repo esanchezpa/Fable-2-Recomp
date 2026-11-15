@@ -19,6 +19,7 @@ import argparse
 import glob
 import math
 import os
+import re
 import sys
 
 import numpy as np
@@ -26,6 +27,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import f2cap  # noqa: E402
+import tonemap  # noqa: E402
 import xtex  # noqa: E402
 import xvs  # noqa: E402
 
@@ -43,6 +45,7 @@ in vec2 in_uv2;
 in vec2 in_uv3;
 in vec2 in_uv4;
 in vec3 in_tnormal;
+in vec3 in_sky;
 out vec3 v_normal;
 out vec2 v_uv;
 out vec4 v_color;
@@ -51,6 +54,7 @@ out vec2 v_uv2;
 out vec2 v_uv3;
 out vec2 v_uv4;
 out vec3 v_tnormal;
+out vec3 v_sky;
 void main() {
     vec4 clip = view_proj * vec4(in_pos, 1.0);
     // The game's clip z runs 0..w; OpenGL's runs -w..w.
@@ -64,6 +68,7 @@ void main() {
     v_uv3 = in_uv3;
     v_uv4 = in_uv4;
     v_tnormal = in_tnormal;
+    v_sky = in_sky;
 }
 '''
 
@@ -72,6 +77,14 @@ FRAGMENT = '''
 uniform sampler2D albedo;
 uniform sampler2D cliff;
 uniform sampler2D shadow;
+uniform sampler2DShadow sun_shadow;  // our own sun shadow map (Scene.shadow_pass)
+uniform mat4 sun_matrix;
+uniform int has_sun_shadow;
+// The game's blob shadows (pixel shader 7F65142C): spheres around characters'
+// feet that darken whatever is inside: sat(1 - k * (1 - d^2 / r^2)) ^ p.
+uniform vec4 blobs[8];     // centre, radius
+uniform vec2 blob_k[8];    // power p, strength k
+uniform int blob_count;
 uniform int has_albedo;
 uniform int has_cliff;
 uniform int has_shadow;
@@ -82,6 +95,17 @@ uniform int alpha_test;
 uniform int mode;          // 0 lit albedo, 1 albedo only, 2 normals, 3 draw ids (--pick)
 uniform vec3 id_color;
 uniform vec3 sun_dir;
+// The game's lighting constants for this draw (pixel shader bank):
+// c11.x sky scale, c20 ambient + exposure, c21 sky colour + power, c87 sun colour.
+uniform float amb_scale;
+uniform vec4 ambient;
+uniform vec4 sky_light;
+uniform vec3 sun_col;
+uniform vec3 default_sky;  // baked sky light for draws that don't give one
+uniform int has_sky;
+uniform int shadow_gamma;  // the lightmap's fetch is gamma-flagged (sign 3)
+uniform float tone_gamma;
+in vec3 v_sky;
 in vec3 v_normal;
 in vec2 v_uv;
 in vec4 v_color;
@@ -91,6 +115,13 @@ in vec2 v_uv3;
 in vec2 v_uv4;
 in vec3 v_tnormal;
 out vec4 frag;
+''' + tonemap.TO_HDR + '''
+vec3 xe_gamma_to_linear(vec3 g) {
+    // The Xbox 360's piecewise-linear gamma curve (texture sign 'gamma').
+    g = clamp(g, 0.0, 1.0);
+    return mix(mix(g * 0.25, (g - 0.125) * 0.5, step(0.25, g)),
+               mix(g - 0.25, (g - 0.5) * 2.0, step(0.75, g)), step(0.375, g));
+}
 vec4 terrain() {
     // As the game's layer shader: the layer texture and a cliff texture
     // projected along x and y, blended by slope, in linear (squared) colour.
@@ -104,7 +135,7 @@ vec4 terrain() {
         w /= w.x + w.y;
         c = c * g + (ca * ca * w.x + cb * cb * w.y) * (1.0 - g);
     }
-    return vec4(sqrt(c), v_color.a);
+    return vec4(c, v_color.a);  // linear (squared), as the game lights it
 }
 vec3 sky_colour(vec3 d) {
     float t = clamp(d.z, 0.0, 1.0);
@@ -115,7 +146,7 @@ vec4 fog(vec4 c) {
     if (mode != 0) return c;
     float d = length(v_world - eye);
     float k = 1.0 - exp(-max(d - 20.0, 0.0) / 260.0);
-    return vec4(mix(c.rgb, sky_colour(normalize(v_world - eye)) * 0.95, k * 0.8), c.a);
+    return vec4(mix(c.rgb, to_hdr(sky_colour(normalize(v_world - eye)) * 0.95), k * 0.8), c.a);
 }
 vec4 water() {
     // Two scrolling layers of the game's water normal map (tf2, DXN: x, y).
@@ -130,34 +161,72 @@ vec4 water() {
     f = 0.25 + 0.75 * f;
     vec3 c = mix(vec3(0.10, 0.17, 0.18), sky_colour(r), f);
     c += vec3(1.0, 0.95, 0.85) * pow(max(dot(r, normalize(sun_dir)), 0.0), 300.0) * 4.0;
-    return vec4(c, 1.0);
+    return vec4(to_hdr(c), 1.0);
 }
 void main() {
     if (material == 2 && mode != 2) { frag = fog(water()); return; }
     if (material == 3 && mode != 2) {
         vec3 d = normalize(v_world - eye);
         vec3 c = sky_colour(d) + vec3(1.0, 0.9, 0.7) * pow(max(dot(d, normalize(sun_dir)), 0.0), 64.0) * 0.6;
-        frag = vec4(c, 1.0);
+        frag = vec4(to_hdr(c), 1.0);
         return;
     }
-    // Tree impostors: the baked colour is linear; shown like other albedo.
-    vec4 a = material == 4 ? (has_albedo != 0 ? sqrt(texture(albedo, v_uv)) : vec4(0.3))
+    // Linear albedo: the game squares its colour textures; impostor colour is
+    // already linear.
+    vec4 a = material == 4 ? (has_albedo != 0 ? texture(albedo, v_uv) : vec4(0.1))
            : material == 1 ? terrain()
            : has_albedo != 0 ? texture(albedo, v_uv) : vec4(0.6, 0.6, 0.6, 1.0);
     if (alpha_test != 0 && a.a < 0.5) discard;
+    if (material == 0) a.rgb *= a.rgb;
     vec3 n = normalize(v_normal);
     if (mode == 2) { frag = vec4(n * 0.5 + 0.5, 1.0); return; }
     if (mode == 3) { frag = vec4(id_color, 1.0); return; }
-    vec3 c = material >= 1 ? a.rgb : a.rgb * v_color.rgb;
-    if (mode == 0) {
-        float l = max(dot(n, sun_dir), 0.0);
-        // Baked terrain lightmap (shadows of buildings and trees) when there is one.
-        float s = has_shadow != 0 ? texture(shadow, v_uv4).r : 1.0;
-        // Sky ambient (cool, dimmer in the lightmap's shadows) + warm sun.
-        c *= vec3(0.40, 0.43, 0.50) * mix(0.6, 1.0, s) + vec3(1.0, 0.90, 0.72) * 1.15 * l * s;
+    if (mode == 1) { frag = vec4(sqrt(a.rgb), 1.0); return; }
+    // As the game: baked sky light ^ c21.w * c21.xyz (+ c20 ambient) * c11.x,
+    // plus sun c87 * N.L, all times exposure c20.w.
+    vec3 sky = has_shadow != 0 ? texture(shadow, v_uv4).rgb : has_sky != 0 ? v_sky : default_sky;
+    if (has_shadow != 0 && shadow_gamma != 0) sky = xe_gamma_to_linear(sky);
+    float l = max(dot(n, sun_dir), 0.0);
+    if (has_sun_shadow != 0 && l > 0.0) {
+        vec4 sp = sun_matrix * vec4(v_world + n * 0.05, 1.0);
+        vec3 uvz = sp.xyz / sp.w * 0.5 + 0.5;
+        if (all(greaterThan(uvz, vec3(0.0))) && all(lessThan(uvz, vec3(1.0)))) {
+            float lit = 0.0;
+            vec2 texel = 1.0 / vec2(textureSize(sun_shadow, 0));
+            for (int y = -1; y <= 1; ++y)
+                for (int x = -1; x <= 1; ++x)
+                    lit += texture(sun_shadow, vec3(uvz.xy + vec2(x, y) * texel * 1.5, uvz.z - 0.0008));
+            l *= lit / 9.0;
+        }
+    }
+    vec3 light = (pow(max(sky, vec3(0.0)), vec3(sky_light.w)) * sky_light.rgb + ambient.rgb) * amb_scale
+               + sun_col * l;
+    vec3 c = a.rgb * light * ambient.w;
+    for (int i = 0; i < blob_count; ++i) {
+        vec3 dv = v_world - blobs[i].xyz;
+        float f = clamp(1.0 - blob_k[i].y * (1.0 - clamp(dot(dv, dv) / (blobs[i].w * blobs[i].w), 0.0, 1.0)), 0.0, 1.0);
+        c *= pow(f, blob_k[i].x);
     }
     frag = fog(vec4(c, material == 1 ? a.a : 1.0));
 }
+'''
+
+
+SHADOW_VERTEX = '''
+#version 330
+uniform mat4 sun_matrix;
+in vec3 in_pos;
+in vec2 in_uv;
+out vec2 v_uv;
+void main() { v_uv = in_uv; gl_Position = sun_matrix * vec4(in_pos, 1.0); }
+'''
+
+SHADOW_FRAGMENT = '''
+#version 330
+uniform sampler2D albedo;
+uniform int alpha_test;
+in vec2 v_uv;
+void main() { if (alpha_test != 0 && texture(albedo, v_uv).a < 0.5) discard; }
 '''
 
 
@@ -284,14 +353,67 @@ def colour_pass_meshes(cap, shader_dir, only=None):
             meshes.append(coarse_terrain_mesh(d, pos, tris, out, shader_dir, palette))
             continue
         uv, albedo = draw_albedo(d, out, shader_dir)
-        mesh = f2cap.Mesh(d, pos, tris, smooth_normals(pos, tris), uv)
+        mesh = f2cap.Mesh(d, pos, tris, game_normals(out) if game_normals(out) is not None
+                          else smooth_normals(pos, tris), uv)
         mesh.cull = gl_cull_face(d)
         mesh.albedo = albedo
+        src = sky_source(d.ps, shader_dir)
+        if src and src[0] == 'interp' and f'o{src[1]}' in out:
+            mesh.sky = out[f'o{src[1]}'][:, :3]
         meshes.append(mesh)
     normalize_terrain_weights(meshes)
     for vs, why in reasons.items():
         print(f'vs {vs}: {why}')
     return meshes, skipped, vp, spread
+
+
+def game_normals(out):
+    """The world normal the game's vertex shaders pass in o1, when o1 holds
+    unit vectors (static meshes, characters); else None."""
+    o1 = out.get('o1')
+    if o1 is None:
+        return None
+    n = o1[:, :3]
+    length = np.linalg.norm(n, axis=1)
+    if not len(n) or abs(np.median(length) - 1.0) > 0.05:
+        return None
+    return n / np.maximum(length, 1e-6)[:, None]
+
+
+_sky_sources = {}
+
+
+def sky_source(ps, shader_dir):
+    """Where a pixel shader's baked sky light comes from: ('tex', slot, coord
+    interpolator, coord swizzle), ('interp', n) for vertex shader output oN,
+    or None. Found from the log() of that colour, which feeds the sky scale
+    c21 (the game raises it to c21.w)."""
+    if ps in _sky_sources:
+        return _sky_sources[ps]
+    found = None
+    try:
+        with open(os.path.join(shader_dir, f'shader_{ps}.ucode.frag'), encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    lines = [re.sub(r'^\s*/\*.*?\*/', '', l).strip().lstrip('+').strip() for l in text.splitlines()]
+    for i, line in enumerate(lines):
+        m = re.search(r'log r\d+\.\w+, r_abs\[(\d+)\]\.x', line)
+        if not m or not any('c21' in x for x in lines[i:i + 24]):
+            continue
+        n = int(m.group(1))
+        found = ('interp', n)
+        for x in reversed(lines[:i]):
+            x = re.sub(r'^\(!?p0\)\s*', '', x)
+            w = re.match(r'(\w+)\s+r%d\.(\S+?),' % n, x)
+            if not w or w.group(2)[0] == '_':
+                continue  # leaves .x (what the log reads) alone
+            t = re.match(r'tfetch2D r%d\.\S+, r(\d+)\.(\w+), tf(\d+)' % n, x)
+            found = ('tex', int(t.group(3)), int(t.group(1)), t.group(2)) if t else None
+            break
+        break
+    _sky_sources[ps] = found
+    return found
 
 
 def normalize_terrain_weights(meshes):
@@ -358,6 +480,7 @@ def terrain_palette(draws):
 
 def coarse_terrain_mesh(d, pos, tris, out, shader_dir, palette):
     normal = smooth_normals(pos, tris)
+    normal *= np.where(normal[:, 2:3] < 0, -1.0, 1.0)  # height field: up
     mesh = f2cap.Mesh(d, pos, tris, normal, np.stack([pos[:, 0], -pos[:, 1]], 1) / 8.0)
     mesh.cull = gl_cull_face(d)
     mesh.material = 1
@@ -418,7 +541,9 @@ def terrain_layer_mesh(d, pos, tris, out):
     n = len(pos)
     color = np.ones((n, 4))
     color[:, 3] = np.clip(out[io['alpha']][:, 3], 0.0, 1.0)
-    normal = smooth_normals(pos, tris)
+    # Terrain is a height field: its normal points up whatever the winding.
+    normal = out[io['normal']][:, :3].copy() if io['normal'] else smooth_normals(pos, tris)
+    normal *= np.where(normal[:, 2:3] < 0, -1.0, 1.0)
     mesh = f2cap.Mesh(d, pos, tris, normal, out[io['uv']][:, :2], color)
     mesh.cull = gl_cull_face(d)
     mesh.material = 1
@@ -477,6 +602,69 @@ def gl_cull_face(draw):
     return 'back' if keep_ccw else 'front'
 
 
+def texture_is_gamma(draw, slot):
+    """Whether a texture fetch constant marks its colour channels as gamma
+    (sign 3): the GPU then linearises them on fetch."""
+    w0 = draw.reg(0x4800 + slot * 6)
+    return all((w0 >> (2 + 2 * c)) & 3 == 3 for c in range(3))
+
+
+_ps_texts = {}
+
+
+def _ps_text(ps):
+    if ps not in _ps_texts:
+        try:
+            with open(os.path.join(BUILD, 'shdump', f'shader_{ps}.ucode.frag'), encoding='utf-8',
+                      errors='replace') as f:
+                _ps_texts[ps] = f.read()
+        except OSError:
+            _ps_texts[ps] = ''
+    return _ps_texts[ps]
+
+
+def draw_lighting(draw):
+    """The game's lighting constants of a draw (pixel shader bank): c11.x sky
+    scale, c20 ambient + exposure, c21 sky colour + power, c87 sun colour.
+    Falls back to the scene's usual values where a shader doesn't set them."""
+    c = draw._consts[1024:2048].view(np.float32).astype(np.float64).reshape(256, 4)
+    ok = lambda v: np.all(np.isfinite(v)) and np.any(v != 0)  # noqa: E731
+    amb_scale = float(c[11][0]) if ok(c[11]) else 0.716
+    ambient = tuple(c[20]) if ok(c[20]) and c[20][3] > 0 else (0.029, 0.047, 0.113, 8.27)
+    sky_light = tuple(c[21]) if ok(c[21]) and c[21][3] > 0 else (1.80, 1.72, 2.31, 1.3)
+    # Shaders with point lights pack four lights in c80..c83 / c87..c90 with
+    # the sun in the slot c112 picks; the others have the sun colour in c87.
+    # Point lights aren't drawn yet, so those take the scene's sun colour.
+    if 'c112' in _ps_text(draw.ps):
+        sun_col = None
+    else:
+        sun_col = tuple(c[87][:3]) if ok(c[87]) else None
+    return {'amb_scale': amb_scale, 'ambient': tuple(map(float, ambient)),
+            'sky_light': tuple(map(float, sky_light)),
+            'sun_col': tuple(map(float, sun_col)) if sun_col else None}
+
+
+BLOB_SHADOW_PS = '7F65142C'
+
+
+def blob_shadows(cap):
+    """The game's blob shadows this frame: [((x, y, z, radius), (power, strength))]."""
+    found = {}
+    for d in cap.draws:
+        if d.ps.startswith(BLOB_SHADOW_PS):
+            c = d._consts[1024:2048].view(np.float32).astype(np.float64).reshape(256, 4)
+            key = tuple(np.round(c[31], 3))
+            found[key] = (tuple(map(float, c[31])), (float(c[46][0]), float(c[47][0])))
+    return list(found.values())
+
+
+def scene_sun_colour(draws):
+    """The sun colour (c87) shared by the single-light shaders."""
+    cols = [draw_lighting(d)['sun_col'] for d in draws]
+    cols = [c for c in cols if c]
+    return tuple(np.median(np.array(cols), axis=0)) if cols else (1.007, 0.888, 0.405)
+
+
 def game_view_proj(draws):
     """The game camera's world -> clip matrix, from the static-world draws
     (c0..c3 world-view-projection, c4..c6 world); also how much they disagree."""
@@ -495,12 +683,30 @@ def game_view_proj(draws):
 
 
 class Scene:
-    def __init__(self, ctx, meshes, textures):
+    def __init__(self, ctx, meshes, textures, tone=None, blobs=()):
         self.ctx = ctx
         self.prog = ctx.program(vertex_shader=VERTEX, fragment_shader=FRAGMENT)
         self.items = []
+        # The game's tonemap (tonemap.py); the scene is lit in its HDR units.
+        self.tone = tone or tonemap.Tonemap(None)
+        self.curve, self.inv_curve = self.tone.textures(ctx)
+        self.tone_prog = ctx.program(vertex_shader=tonemap.QUAD_VS, fragment_shader=tonemap.GLSL)
+        quad = ctx.buffer(np.array([-1, -1, 3, -1, -1, 3], 'f4').tobytes())
+        self.tone_vao = ctx.vertex_array(self.tone_prog, [(quad, '2f', 'in_vert')])
+        self.hdr = None
+        self.blobs = list(blobs)[:8]
+        self.shadow_prog = ctx.program(vertex_shader=SHADOW_VERTEX, fragment_shader=SHADOW_FRAGMENT)
+        self.shadow_size = 4096
+        self.shadow_tex = ctx.depth_texture((self.shadow_size, self.shadow_size))
+        self.shadow_tex.compare_func = '<='
+        self.shadow_tex.filter = (ctx.LINEAR, ctx.LINEAR)
+        self.shadow_fbo = ctx.framebuffer(depth_attachment=self.shadow_tex)
+        self.sun_shadows = True
+        skies = [m.sky for m in meshes if getattr(m, 'sky', None) is not None]
+        self.default_sky = tuple(np.median(np.vstack(skies), axis=0)) if skies else (0.5, 0.5, 0.5)
         self.cull = True  # match the game's backface culling (B toggles it in --fly)
         self.sun = game_sun([m.draw for m in meshes])
+        self.sun_col = scene_sun_colour([m.draw for m in meshes])
         for m in meshes:
             n = len(m.position)
             normal = m.normal if m.normal is not None else np.tile([0.0, 0.0, 1.0], (n, 1))
@@ -511,16 +717,22 @@ class Scene:
             extra = [e if e is not None else z2 for e in extra]
             tn = getattr(m, 'tnormal', None)
             tn = tn if tn is not None else np.tile([0.0, 0.0, 1.0], (n, 1))
-            data = np.hstack([m.position, normal, uv, color] + extra + [tn]).astype('f4')
+            sky = getattr(m, 'sky', None)
+            has_sky = sky is not None
+            sky = sky if has_sky else np.zeros((n, 3))
+            data = np.hstack([m.position, normal, uv, color] + extra + [tn, sky]).astype('f4')
             tris = m.tris.astype('i4')
             vbo = ctx.buffer(data.tobytes())
             ibo = ctx.buffer(tris.tobytes())
-            names = ['in_pos', 'in_normal', 'in_uv', 'in_color', 'in_uv2', 'in_uv3', 'in_uv4', 'in_tnormal']
-            fmt = ['3f', '3f', '2f', '4f', '2f', '2f', '2f', '3f']
+            names = ['in_pos', 'in_normal', 'in_uv', 'in_color', 'in_uv2', 'in_uv3', 'in_uv4', 'in_tnormal', 'in_sky']
+            fmt = ['3f', '3f', '2f', '4f', '2f', '2f', '2f', '3f', '3f']
             # Attributes the shader compiled away must be skipped with 'x' padding.
             fmt = [f if nm in self.prog else f.replace('f', 'x4') for f, nm in zip(fmt, names)]
             used = [nm for nm in names if nm in self.prog]
             vao = ctx.vertex_array(self.prog, [(vbo, ' '.join(fmt), *used)], ibo)
+            sfmt = ' '.join(f if nm in ('in_pos', 'in_uv') else f.replace('f', 'x4')
+                            for f, nm in zip(['3f', '3f', '2f', '4f', '2f', '2f', '2f', '3f', '3f'], names))
+            svao = ctx.vertex_array(self.shadow_prog, [(vbo, sfmt, 'in_pos', 'in_uv')], ibo)
             tex = self._texture(textures, getattr(m, 'albedo', None))
             extras = {
                 'material': getattr(m, 'material', 0),
@@ -529,6 +741,12 @@ class Scene:
                 'cliff_ab': getattr(m, 'cliff_ab', (1.0, 0.0)),
                 'blend': gl_blend(m.draw),
                 'bias': getattr(m, 'depth_bias', False),
+                'has_sky': int(has_sky),
+                'shadow_gamma': int(texture_is_gamma(m.draw, 3)),
+                'light': draw_lighting(m.draw),
+                'shadow_vao': svao,
+                # Opaque meshes and tree impostors cast sun shadows.
+                'casts': getattr(m, 'material', 0) in (0, 4) and gl_blend(m.draw) is None,
             }
             self.items.append((vao, tex, m.draw.alpha_test, len(tris) * 3, getattr(m, 'cull', None), extras))
         self.triangles = sum(i[3] for i in self.items) // 3
@@ -573,7 +791,29 @@ class Scene:
         fwd /= np.linalg.norm(fwd)
         z1, z2 = (view_proj @ np.append(e + fwd * 1.0, 1.0)), (view_proj @ np.append(e + fwd * 100.0, 1.0))
         self.bias_sign = 1.0 if (z2[2] * 2 - z2[3]) / z2[3] > (z1[2] * 2 - z1[3]) / z1[3] else -1.0
-        fbo = target if target is not None else ctx.fbo
+        target = target if target is not None else ctx.fbo
+        size = target.size if hasattr(target, 'size') else target.viewport[2:]
+        if self.hdr is None or self.hdr.size != tuple(size):
+            self.hdr = ctx.framebuffer(color_attachments=[ctx.texture(tuple(size), 4, dtype='f2')],
+                                       depth_attachment=ctx.depth_renderbuffer(tuple(size)))
+        sun_matrix = self.shadow_pass(view_proj, s) if self.sun_shadows and mode == 0 else None
+        fbo = self.hdr
+        fbo.use()
+        fbo.clear(0.0, 0.0, 0.0, 1.0)  # black like the game: terrain layers add onto it
+        self._set('inv_curve', 3)
+        self.inv_curve.use(3)
+        self._set('tone_gamma', self.tone.gamma)
+        self._set('default_sky', self.default_sky)
+        self._set('has_sun_shadow', int(sun_matrix is not None))
+        self._set('blob_count', len(self.blobs))
+        if self.blobs and 'blobs' in self.prog:
+            pad = self.blobs + [((0.0, 0.0, 0.0, 1.0), (1.0, 0.0))] * (8 - len(self.blobs))
+            self.prog['blobs'].write(np.array([b[0] for b in pad], 'f4').tobytes())
+            self.prog['blob_k'].write(np.array([b[1] for b in pad], 'f4').tobytes())
+        if sun_matrix is not None:
+            self.prog['sun_matrix'].write(sun_matrix.T.astype('f4').tobytes())
+            self._set('sun_shadow', 4)
+            self.shadow_tex.use(4)
         fbo.color_mask = (False, False, False, False)
         fbo.use()
         ctx.depth_mask = True
@@ -586,6 +826,66 @@ class Scene:
         self._draw_items(mode, depth_only=False)
         ctx.depth_mask = True
         ctx.polygon_offset = (0.0, 0.0)
+        # The game's tonemap into the target.
+        target.use()
+        ctx.disable(ctx.BLEND)
+        ctx.disable(ctx.DEPTH_TEST)
+        ctx.disable(ctx.CULL_FACE)
+        self.hdr.color_attachments[0].use(0)
+        self.curve.use(1)
+        tp = self.tone_prog
+        tp['hdr'].value, tp['curve'].value = 0, 1
+        tp['tone'].value = (self.tone.scale, self.tone.grey, self.tone.saturation, self.tone.gain)
+        tp['gamma'].value = self.tone.gamma
+        tp['passthrough'].value = int(mode != 0)
+        self.tone_vao.render()
+        ctx.enable(ctx.DEPTH_TEST)
+
+    def shadow_pass(self, view_proj, sun, radius=90.0, depth=400.0):
+        """Renders the scene's depth from the sun (orthographic, around what
+        the camera sees) and returns the world -> sun clip matrix."""
+        ctx = self.ctx
+        m = view_proj[[0, 1, 3]]
+        eye = np.linalg.solve(m[:, :3], -m[:, 3])
+        fwd = np.linalg.inv(view_proj) @ [0.0, 0.0, 0.5, 1.0]
+        fwd = fwd[:3] / fwd[3] - eye
+        fwd /= np.linalg.norm(fwd)
+        centre = eye + fwd * radius * 0.6
+        d = -np.asarray(sun, float)          # light travels along -sun
+        up = np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.99 else np.array([0.0, 1.0, 0.0])
+        r = np.cross(d, up); r /= np.linalg.norm(r)
+        u = np.cross(r, d)
+        view = np.eye(4)
+        view[0, :3], view[1, :3], view[2, :3] = r, u, -d
+        view[:3, 3] = -view[:3, :3] @ centre
+        # Snap to whole texels so the shadow doesn't swim as the camera moves.
+        texel = 2.0 * radius / self.shadow_size
+        view[0, 3] = np.floor(view[0, 3] / texel) * texel
+        view[1, 3] = np.floor(view[1, 3] / texel) * texel
+        proj = np.diag([1.0 / radius, 1.0 / radius, -1.0 / depth, 1.0])
+        sun_matrix = proj @ view
+        self.shadow_fbo.use()
+        self.shadow_fbo.clear(depth=1.0)
+        ctx.enable(ctx.DEPTH_TEST)
+        ctx.depth_func = '<'
+        ctx.depth_mask = True
+        ctx.disable(ctx.BLEND)
+        ctx.disable(ctx.CULL_FACE)
+        ctx.polygon_offset = (1.5, 4.0)
+        sp = self.shadow_prog
+        sp['sun_matrix'].write(sun_matrix.T.astype('f4').tobytes())
+        if 'albedo' in sp:
+            sp['albedo'].value = 0
+        for vao, tex, alpha_test, count, cull, ex in self.items:
+            if not ex['casts']:
+                continue
+            if tex is not None:
+                tex.use(0)
+            if 'alpha_test' in sp:
+                sp['alpha_test'].value = int(bool(alpha_test) and tex is not None)
+            ex['shadow_vao'].render(vertices=count)
+        ctx.polygon_offset = (0.0, 0.0)
+        return sun_matrix
 
     def _draw_items(self, mode, depth_only):
         ctx = self.ctx
@@ -600,6 +900,13 @@ class Scene:
                 k = item + 1
                 self._set('id_color', ((k & 255) / 255.0, ((k >> 8) & 255) / 255.0, ((k >> 16) & 255) / 255.0))
             self._set('material', ex['material'])
+            self._set('has_sky', ex['has_sky'])
+            self._set('shadow_gamma', ex['shadow_gamma'])
+            lt = ex['light']
+            self._set('amb_scale', lt['amb_scale'])
+            self._set('ambient', lt['ambient'])
+            self._set('sky_light', lt['sky_light'])
+            self._set('sun_col', lt['sun_col'] or self.sun_col)
             self._set('cliff_ab', ex['cliff_ab'])
             for unit, name in ((1, 'cliff'), (2, 'shadow')):
                 if ex[name] is not None:
@@ -630,7 +937,8 @@ def render_still(cap, meshes, args):
     main = cap.main_colour_viewport()
     scale = args.scale
     w, h = int(main[0] * scale), int(main[1] * scale)
-    scene = Scene(ctx, meshes, TextureStore(ctx, args.textures))
+    scene = Scene(ctx, meshes, TextureStore(ctx, args.textures), tonemap.Tonemap(cap),
+                  blob_shadows(cap))
     vp, spread = args.vp, args.spread
     print(f'{len(meshes)} draws, {scene.triangles} triangles; camera from draws agrees to {spread:.2e}')
     fbo = ctx.simple_framebuffer((w, h))
@@ -722,7 +1030,8 @@ def fly(cap, meshes, args):
     glfw.make_context_current(win)
     glfw.swap_interval(1)
     ctx = moderngl.create_context()
-    scene = Scene(ctx, meshes, TextureStore(ctx, args.textures))
+    scene = Scene(ctx, meshes, TextureStore(ctx, args.textures), tonemap.Tonemap(cap),
+                  blob_shadows(cap))
     vp = args.vp
     eye, yaw, pitch = camera_from_view_proj(vp)
     print(f'{len(meshes)} draws, {scene.triangles} triangles; start at {eye.round(2)}')
