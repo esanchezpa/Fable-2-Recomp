@@ -2,7 +2,7 @@
 files the SDK swaps in for the game's own shaders (cvar shader_replace_dir,
 seeded from [graphics] shader_rewrites).
 
-    python tools/shaders/build_replace.py [--out DIR]
+    python tools/shaders/build_replace.py [--out DIR] [--sparrow]
 
 Default output: shaders/replace in the repo (checked in; CMake stages it next
 to the exe as shaders/replace at build time). Each entry in
@@ -13,6 +13,11 @@ hashes are found.
 Shaders that read the pixel position (GuestPixelPosition / RES_SCALE) bake
 the resolution scale in, so they are built once per scale as
 <hash>.x<scale>.dxbc; the SDK picks the one for the running scale.
+
+--sparrow builds the same set with /D SPARROW=1 into shaders/sparrow_replace,
+which the Project Sparrow edition loads instead ([graphics] sparrow_renderer;
+see shaders/sparrow_common.hlsli). Shaders without SPARROW code come out the
+same as the Enhanced ones.
 """
 import argparse
 import glob
@@ -23,6 +28,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'shaders')
 DEFAULT_OUT = os.path.join(SRC, 'replace')
+SPARROW_OUT = os.path.join(SRC, 'sparrow_replace')
 
 # (source file, profile, extra defines, ucode hash)
 SHADERS = [
@@ -39,6 +45,12 @@ SHADERS = [
     ('grass.ps.hlsl', 'ps_5_1', [], '2F8A0341E8C09698'),            # near ground (grass, forest floor)
     ('ground.ps.hlsl', 'ps_5_1', [], '7DDAD5C29B3F56EE'),           # far lightmapped terrain
     ('splat.ps.hlsl', 'ps_5_1', [], '4755A2E4A05BA678'),            # dirt / path splats over the ground
+]
+
+# Built only with --sparrow (Project Sparrow replaces these; Enhanced keeps
+# the game's own).
+SPARROW_ONLY = [
+    ('shadowbuf.ps.hlsl', 'ps_5_1', [], '0F99810F072BF0FC'),        # screen-space sun shadow buffer
 ]
 
 
@@ -59,11 +71,15 @@ def find_fxc():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--out', default=DEFAULT_OUT)
+    parser.add_argument('--out', default=None)
+    parser.add_argument('--sparrow', action='store_true')
     args = parser.parse_args()
+    if args.out is None:
+        args.out = SPARROW_OUT if args.sparrow else DEFAULT_OUT
+    sparrow = ['SPARROW=1'] if args.sparrow else []
     fxc = find_fxc()
     os.makedirs(args.out, exist_ok=True)
-    for source, profile, defines, hash_ in SHADERS:
+    for source, profile, defines, hash_ in SHADERS + (SPARROW_ONLY if args.sparrow else []):
         text = open(os.path.join(SRC, source), encoding='utf-8').read()
         scaled = 'GuestPixelPosition' in text or 'RES_SCALE' in text
         variants = [(f'.x{n}', [f'RES_SCALE={n}.0']) for n in SCALES] if scaled else [('', [])]
@@ -74,7 +90,7 @@ def main():
             out = os.path.join(args.out, hash_ + suffix + '.dxbc')
             cmd = [fxc, '/nologo', '/T', profile, '/E', 'main', '/O3',
                    '/enable_unbounded_descriptor_tables', '/Fo', out]
-            for d in defines + extra:
+            for d in defines + sparrow + extra:
                 cmd += ['/D', d]
             cmd.append(os.path.join(SRC, source))
             result = subprocess.run(cmd, capture_output=True, text=True)

@@ -255,6 +255,10 @@ struct Values {
   // top of the ones above (light shafts, a sharper and wider sun shadow map
   // redrawn every frame, stronger AO); see fable2_texture_pack.h.
   bool ultra = false;
+  // [graphics] sparrow_renderer: Project Sparrow. Seeds the SDK cvar
+  // sparrow_renderer and loads shaders/sparrow_replace instead of
+  // shaders/replace (startup only).
+  bool sparrow_renderer = false;
   // [graphics] anti_aliasing / bloom: seed the SDK cvars post_aa / post_bloom
   // (both run inside the colour grade, so they follow post_grade too).
   bool anti_aliasing = true;

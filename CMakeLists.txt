@@ -127,6 +127,9 @@ add_custom_command(TARGET fable_2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/shaders/replace"
         "$<TARGET_FILE_DIR:fable_2>/shaders/replace"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/sparrow_replace"
+        "$<TARGET_FILE_DIR:fable_2>/shaders/sparrow_replace"
     COMMENT "Staging the shader rewrites"
     VERBATIM)
 # xxHash (header-only, inlined) for checking rebuilt shaders the way the SDK does.

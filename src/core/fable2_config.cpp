@@ -347,6 +347,13 @@ sun_shadow_map = true
 # Costs about 5-10% of the frame rate when uncapped. Default: false
 ultra = false
 
+# Project Sparrow (in development): the new renderer. For now, the ground,
+# rocks and buildings take their sun shadows from the sun shadow map inside
+# their own shaders (shaders\sparrow_replace next to the game) instead of
+# the darkening pass. Needs Sun Shadow Map, Ambient Occlusion and Shader
+# Rewrites. Read at startup. Default: false
+sparrow_renderer = false
+
 # Anti-Aliasing: FXAA on the final picture. Smooths the stair-stepped edges
 # that remain on leaves and grass. Part of Post-Processing. Costs under 1% FPS.
 # Default: true
@@ -599,6 +606,8 @@ bool Load(const std::filesystem::path& path) {
     values.sun_shadow_map = Read<bool>(graphics_table, "graphics", "sun_shadow_map", "boolean",
                                        values.sun_shadow_map);
     values.ultra = Read<bool>(graphics_table, "graphics", "ultra", "boolean", values.ultra);
+    values.sparrow_renderer = Read<bool>(graphics_table, "graphics", "sparrow_renderer",
+                                         "boolean", values.sparrow_renderer);
     values.anti_aliasing = Read<bool>(graphics_table, "graphics", "anti_aliasing", "boolean",
                                       values.anti_aliasing);
     values.bloom = Read<bool>(graphics_table, "graphics", "bloom", "boolean", values.bloom);

@@ -91,6 +91,9 @@
 #define XE_FLOAT_CONSTANTS 21
 #define XE_DESCRIPTOR_INDICES 7
 #include "xe_common.hlsli"
+#if SPARROW
+#include "sparrow_common.hlsli"
+#endif
 
 #define C0 K[0]
 #define C8 K[1]
@@ -246,6 +249,11 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   }
   r2.xy = abs(r7.xy) * C0.zw + C0.xy;                                    // 33
   r2.w = TF8(r2.xy).x;                                                   // 34
+#if SPARROW
+  // Sparrow: the real sun shadow map instead of the game's short-range
+  // screen-space buffer (v2 is the world position, v1 the normal).
+  r2.w = SparrowSunOr(r2.w, input.v2.xyz, normalize(input.v1.xyz));
+#endif
   float dbg_shadow = r2.w;
   r14.xyz = C254.w - C22.xyz;                                            // 35
   r7.xyz = r11.zyx * C27.w;                                              // 36

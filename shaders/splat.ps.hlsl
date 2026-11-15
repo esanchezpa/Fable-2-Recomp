@@ -42,6 +42,9 @@
 #define XE_DESCRIPTOR_INDICES 5
 #include "xe_common.hlsli"
 #include "modern_common.hlsli"
+#if SPARROW
+#include "sparrow_common.hlsli"
+#endif
 
 #define C0 K[0]
 #define C11 K[1]
@@ -97,6 +100,10 @@ float4 main(PSInput8c input) : SV_Target0 {
 
   r7.xy = abs(r8.xy) * C0.zw + C0.xy;                                    // 6
   r1.w = TF8(r7.xy).x;                                                   // 7
+#if SPARROW
+  // Sparrow: the sun shadow map (sparrow_common.hlsli).
+  r1.w = SparrowSunOr(r1.w, input.v2.xyz, normalize(input.v1.xyz));
+#endif
   r9.xy = TF2(r0.xy).xy;                                                 // 8
   r10.xyz = TF0(r0.xy).xyz;                                              // 9
   float magnify = 0.0;

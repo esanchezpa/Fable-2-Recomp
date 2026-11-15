@@ -40,6 +40,9 @@
 #define XE_FLOAT_CONSTANTS 16
 #define XE_DESCRIPTOR_INDICES 4
 #include "xe_common.hlsli"
+#if SPARROW
+#include "sparrow_common.hlsli"
+#endif
 
 #define C0 K[0]
 #define C8 K[1]
@@ -92,6 +95,10 @@ float4 main(PSInput6 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float3 v = r4.xyz * C49.xyz; r6.y = C8.x * r1.w; r4.xyz = v; }       // 10
   r6.xy = r6.xy + C8.wz;                                                 // 11
   r0.w = TF8(r6.zw).x;                                                   // 12
+#if SPARROW
+  // Sparrow: the sun shadow map (sparrow_common.hlsli).
+  r0.w = SparrowSunOrVolume(r0.w, input.v0.xyz);
+#endif
   { float4 t = TF0(r6.yx); r6 = t.wxyz; }                                // 13
   r1 = r6.yzwx * r6.yzwx;                                                // 14
   r0.w = r0.w * C255.w + C255.z;                                         // 15

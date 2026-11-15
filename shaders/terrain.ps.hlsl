@@ -52,6 +52,9 @@
 #define XE_DESCRIPTOR_INDICES 7
 #include "xe_common.hlsli"
 #include "modern_common.hlsli"
+#if SPARROW
+#include "sparrow_common.hlsli"
+#endif
 
 #define C0 K[0]
 #define C11 K[1]
@@ -166,6 +169,13 @@ float4 main(PSInput10 input) : SV_Target0 {
   }
   r9.xy = abs(r10.xy) * C0.zw + C0.xy;                                   // 43
   r0.w = TF8(r9.xy).x;                                                   // 44
+#if SPARROW
+  {
+    // Sparrow: the real sun shadow map (v4 world position, v3 normal).
+    float3 n = normalize(input.v3.xyz);
+    r0.w = SparrowSunOr(r0.w, input.v4.xyz, n.z < 0.0 ? -n : n);
+  }
+#endif
   r9.xyz = (SMOOTH_LIGHT ? SmoothFetch(3, 5, r5.xy) : TF3(r5.xy)).xyz;                                               // 45
   { float s = log2(abs(r9.x)); r1.yzw = -r4.xyz + C19.xyz; r0.x = s; }   // 46
   { float s = log2(abs(r9.y)); r9.x = dot(r8.zxy, r8.zxy); r0.y = s; }   // 47

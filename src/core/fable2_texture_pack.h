@@ -67,6 +67,7 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
   seed("post_sun_map", cfg.sun_shadow_map ? "true" : "false");
   seed("post_aa", cfg.anti_aliasing ? "true" : "false");
   seed("post_bloom", cfg.bloom ? "true" : "false");
+  seed("sparrow_renderer", cfg.sparrow_renderer ? "true" : "false");
   // Ultra (Sparrow Edition): heavier versions of the settings above.
   if (cfg.ultra) {
     seed("post_light_shafts", "true");
@@ -85,7 +86,9 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
   // the exe, not the working directory: the launcher starts the game in the
   // player's data folder.
   const std::u8string shaders =
-      (rex::filesystem::GetExecutableFolder() / "shaders" / "replace").u8string();
+      (rex::filesystem::GetExecutableFolder() / "shaders" /
+       (cfg.sparrow_renderer ? "sparrow_replace" : "replace"))
+          .u8string();
   seed("shader_replace_dir",
        cfg.shader_rewrites ? std::string(shaders.begin(), shaders.end()) : std::string());
 }
