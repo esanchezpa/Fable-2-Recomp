@@ -334,15 +334,6 @@
   "category": "wood",
   "note": "picked wood #47"
  },
- "6AB4E90DC833A363": {
-  "material": "Wood026",
-  "repeat": 1,
-  "rotate": 0,
-  "mode": "global",
-  "normal": null,
-  "category": "wood",
-  "note": "picked wood #48"
- },
  "6ABD1A2BB991324B": {
   "material": "Planks023C",
   "repeat": 1,
@@ -405,15 +396,6 @@
   "normal": null,
   "category": "wood",
   "note": "picked wood #56"
- },
- "C6CB0A03A82F4285": {
-  "material": "Wood081",
-  "repeat": 1,
-  "rotate": 90,
-  "mode": "global",
-  "normal": "F0ABE0FC8DBEC034",
-  "category": "wood",
-  "note": "picked wood #57"
  },
  "D95C942B1A042770": {
   "material": "Planks023A",
