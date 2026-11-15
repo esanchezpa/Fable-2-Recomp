@@ -221,21 +221,31 @@ def build_colour(it, up4, scale, detail=0.9):
     plain = np.asarray(lanczos(alpha_bleed(it['image']), size), np.float32)
     ai = np.asarray(rgb, np.float32)
     ai, it['detail_k'] = reinject_detail(ai, plain, it['image'], scale, detail)
-    level = plain.max(axis=2, keepdims=True)
-    mask = np.clip((level - 4.0) / 20.0, 0.0, 1.0)
-    rgb = Image.fromarray((ai * mask + plain * (1 - mask)).round().clip(0, 255).astype(np.uint8))
     alpha = it['image'].getchannel('A')
     amin, amax = alpha.getextrema()
     if amin == 255:
         kind = 'opaque'
-        alpha = Image.new('L', size, 255)
     else:
         a = np.asarray(alpha)
         # DXT1 alpha is 1-bit; DXT5 foliage often is too in practice.
         binary = it['fmt'] == 'DXT1' or ((a > 8) & (a < 247)).mean() < 0.01
         kind = 'cutout' if binary else 'soft'
+    # Soft-alpha textures are often drawn additively (cobwebs, sparks,
+    # glows), where the colour itself is the brightness and black means
+    # nothing. Their black transparent texels must stay black, so judge the
+    # darkness on the original colour, not the edge-filled copy (whose fill
+    # turned a cobweb into a grey slab). Cut-outs keep the filled colour:
+    # their transparent texels are discarded and the fill stops dark fringes.
+    if kind == 'soft':
+        plain = np.asarray(lanczos(it['image'].convert('RGB'), size), np.float32)
+    level = plain.max(axis=2, keepdims=True)
+    mask = np.clip((level - 4.0) / 20.0, 0.0, 1.0)
+    rgb = Image.fromarray((ai * mask + plain * (1 - mask)).round().clip(0, 255).astype(np.uint8))
+    if kind == 'opaque':
+        alpha = Image.new('L', size, 255)
+    else:
         alpha = lanczos(alpha, size)
-        if binary:
+        if kind == 'cutout':
             alpha = alpha.point(lambda v: 255 if v >= 128 else 0)
     r, g, b = rgb.split()
     return Image.merge('RGBA', (r, g, b, alpha)), kind
