@@ -153,6 +153,19 @@ float3 SparrowSpecular(float3 n, float3 v, float3 l, float roughness, float f0, 
   return light * (3.14159265 * D * V * F * ndl);
 }
 
+// The same lobe split for a specular colour known only later (a material's
+// specular map as F0): F = f0 (1 - Fk) + Fk, so the caller forms
+// f0 * base + grazing.
+void SparrowSpecularSplit(float3 n, float3 v, float3 l, float roughness, float3 light,
+                          inout float3 base, inout float3 grazing) {
+  float3 s = SparrowSpecular(n, v, l, roughness, 1.0, light);  // F = 1
+  float k = 1.0 - saturate(dot(v, normalize(l + v)));
+  float k2 = k * k;
+  float fk = k2 * k2 * k;
+  base += s * (1.0 - fk);
+  grazing += s * fk;
+}
+
 // Sky reflection weight for the ambient light: Fresnel at the view angle,
 // damped by roughness (rough surfaces scatter it into the diffuse they
 // already have). Multiply by the ambient/sky light.
