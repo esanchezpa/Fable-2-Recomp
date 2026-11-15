@@ -316,6 +316,18 @@ float3 SparrowBounce(float3 pos, float3 n) {
 #ifndef SPARROW_BOUNCE
 #define SPARROW_BOUNCE 1.0
 #endif
+// The sky light kept where the sun map sees no open sky at all: under a tree
+// canopy the map's heights are solid, but leaves let light through and the
+// game's baked light already darkens the ground there. Applied as
+// vis + F (1 - vis)^2: closed-in points keep F of the game's ambient, while
+// half-open ones (an arch: 0.67 -> 0.71) barely move.
+#ifndef SPARROW_SKY_FLOOR
+#define SPARROW_SKY_FLOOR 0.4
+#endif
+float SparrowSkyTerm(float vis) {
+  float c = 1.0 - vis;
+  return lerp(1.0, vis + SPARROW_SKY_FLOOR * c * c, SPARROW_SKY);
+}
 
 // --- Ground ambient grid -----------------------------------------------------
 // The SDK works out sky visibility and bounce once a frame, one cell per
@@ -368,7 +380,7 @@ float3 SparrowGroundAmbientLight(float3 ambient, float3 pos, float3 n, float3 su
   vis_out = vis;
   if (vis < 0.0) return ambient;
   vis_out = vis;
-  return ambient * lerp(1.0, vis, SPARROW_SKY) +
+  return ambient * SparrowSkyTerm(vis) +
          SPARROW_BOUNCE_ALBEDO * bounce * saturate(n.z) * sun * SPARROW_BOUNCE;
 }
 
@@ -404,7 +416,7 @@ float3 SparrowAmbient(float3 ambient, float3 pos, float3 n, float3 sun, out floa
   float vis = SparrowSkyVisibility(pos, n);
   vis_out = vis;
   if (vis < 0.0) return ambient;
-  return ambient * lerp(1.0, vis, SPARROW_SKY) + SparrowBounce(pos, n) * sun * SPARROW_BOUNCE;
+  return ambient * SparrowSkyTerm(vis) + SparrowBounce(pos, n) * sun * SPARROW_BOUNCE;
 }
 
 #endif
