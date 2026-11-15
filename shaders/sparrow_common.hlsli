@@ -8,11 +8,14 @@
 // the SDK):
 //   rows 0 .. size-1  depth along the sun, reversed (larger = nearer the
 //                     sun, 0 = nothing drawn there);
-//   row size          frame data: 0-2 map centre, 3 signed half width
+//   rows size ..      the ground ambient grid, size / 8 rows
+//                     (sparrow_ambient.cs.hlsl; SparrowGroundAmbient);
+//   last row          frame data: 0-2 map centre, 3 signed half width
 //                     (negative: up axis flipped), 4 half depth, 5 size,
 //                     6 valid, 7 bias texels, 8-10 direction toward the
 //                     sun, 11 frame counter, 12 debug mode (SDK cvar
-//                     sparrow_debug: 1 = no sun wherever the map covers).
+//                     sparrow_debug: 1 = no sun wherever the map covers),
+//                     13 grid written this frame.
 // Include after xe_common.hlsli.
 
 #ifndef SPARROW_COMMON_HLSLI
@@ -314,12 +317,78 @@ float3 SparrowBounce(float3 pos, float3 n) {
 #define SPARROW_BOUNCE 1.0
 #endif
 
+// --- Ground ambient grid -----------------------------------------------------
+// The SDK works out sky visibility and bounce once a frame, one cell per
+// 8 x 8 map texels, with the same search as above (sparrow_ambient.cs.hlsl).
+// A cell is the line along the sun through its centre: a ground point maps
+// to it whatever its height, and the cell holds the visibility at four
+// heights spanning the occluders around, so the lookup interpolates at the
+// point's own height (the ground itself is not in the map: it is drawn as
+// blended colour-pass layers). Bilinear over four cells. -2: no grid this
+// frame, -3: outside the map.
+float SparrowGroundAmbient(float3 pos, out float bounce) {
+  bounce = 0.0;
+  uint rows = SparrowSunRows();
+  if (rows < 2u) return -2.0;
+  int fr = int(rows) - 1;
+  if (SparrowMap(int2(6, fr)) < 0.5 || SparrowMap(int2(13, fr)) < 0.5) return -2.0;
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return -2.0;
+  int size = int(f.size), g = size / 8;
+  float3 v = pos - f.centre;
+  float2 m = float2(dot(f.right, v), dot(f.up, v)) / f.radius;
+  if (max(abs(m.x), abs(m.y)) >= 0.97) return -3.0;
+  float2 uv = float2(m.x * 0.5 + 0.5, 0.5 - m.y * 0.5) * float(g) - 0.5;
+  int2 b = int2(floor(uv));
+  float2 fu = uv - float2(b);
+  float vis = 0.0;
+  [unroll] for (int k = 0; k < 4; ++k) {
+    int2 o = int2(k & 1, k >> 1);
+    int2 c = clamp(b + o, 0, g - 1);
+    float w = (o.x ? fu.x : 1.0 - fu.x) * (o.y ? fu.y : 1.0 - fu.y);
+    int row = size + c.y;
+    float lo = SparrowMap(int2(4 * g + c.x, row)), hi = SparrowMap(int2(5 * g + c.x, row));
+    float t = saturate((pos.z - lo) / max(hi - lo, 0.01)) * 3.0;
+    float v0 = SparrowMap(int2(c.x, row)), v1 = SparrowMap(int2(g + c.x, row));
+    float v2 = SparrowMap(int2(2 * g + c.x, row)), v3 = SparrowMap(int2(3 * g + c.x, row));
+    float cv = t < 1.0 ? lerp(v0, v1, t) : (t < 2.0 ? lerp(v1, v2, t - 1.0) : lerp(v2, v3, t - 2.0));
+    vis += w * cv;
+    bounce += w * SparrowMap(int2(6 * g + c.x, row));
+  }
+  return saturate(vis);
+}
+
+// SparrowAmbient for upward-facing ground through the grid (n: the surface
+// normal; steep faces keep the game's ambient).
+float3 SparrowGroundAmbientLight(float3 ambient, float3 pos, float3 n, float3 sun, out float vis_out) {
+  vis_out = -1.0;
+  if (n.z < 0.6) return ambient;
+  float bounce;
+  float vis = SparrowGroundAmbient(pos, bounce);
+  vis_out = vis;
+  if (vis < 0.0) return ambient;
+  vis_out = vis;
+  return ambient * lerp(1.0, vis, SPARROW_SKY) +
+         SPARROW_BOUNCE_ALBEDO * bounce * saturate(n.z) * sun * SPARROW_BOUNCE;
+}
+
+// sparrow_debug 3: sky visibility as red (open) .. green (closed in), blue
+// where Sparrow does not cover the point (vis < 0) and the game's ambient
+// stays. Through the tonemap, read vis as R / (R + G).
+float3 SparrowVisDebug(float vis) {
+  // Ground grid misses: -2 no grid this frame (magenta), -3 outside the map
+  // (cyan); -1 not covered / steep (blue).
+  if (vis < -2.5) return float3(0.0, 0.5, 0.5);
+  if (vis < -1.5) return float3(0.5, 0.0, 0.5);
+  return vis < 0.0 ? float3(0.0, 0.0, 0.5) : float3(vis, 1.0 - vis, 0.0) * 0.5;
+}
+
 // The material's ambient light (game units, before albedo) shaped by the
 // open sky and given the sun's bounce. vis_out: the sky visibility (for
-// sparrow_debug 3), 1 where not covered.
+// sparrow_debug 3), -1 where not covered.
 float3 SparrowAmbient(float3 ambient, float3 pos, float3 n, float3 sun, out float vis_out) {
   float vis = SparrowSkyVisibility(pos, n);
-  vis_out = vis < 0.0 ? 1.0 : vis;
+  vis_out = vis;
   if (vis < 0.0) return ambient;
   return ambient * lerp(1.0, vis, SPARROW_SKY) + SparrowBounce(pos, n) * sun * SPARROW_BOUNCE;
 }

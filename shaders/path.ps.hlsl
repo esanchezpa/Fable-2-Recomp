@@ -122,11 +122,11 @@ float4 main(PSInput8 input) : SV_Target0 {
   r7.y = C254.y - r7.x;                                                  // 37
   r1 = r7.y * C112;                                                      // 38
   r4.xyz = r6.xyz * r4.xyz + C20.xyz;                                    // 39
-  float sky_vis = 1.0;
+  float sky_vis = -1.0;
 #if SPARROW
   if (SparrowActive()) {
     float3 sun = C87.xyz * C112.x + C88.xyz * C112.y + C89.xyz * C112.z + C90.xyz * C112.w;
-    r4.xyz = SparrowAmbient(r4.xyz, world, n_world, sun, sky_vis);
+    r4.xyz = SparrowGroundAmbientLight(r4.xyz, world, n_world, sun, sky_vis);
   }
 #endif
   float3 ambient = r4.xyz;  // Sparrow: the ambient light, before the albedo
@@ -226,7 +226,7 @@ float4 main(PSInput8 input) : SV_Target0 {
   r7.x = C254.y - r7.x;                                                  // 107
   float4 o = float4(r0.xyz * C20.w, r7.x * r7.w);                        // 108-109
 #if SPARROW
-  if (SparrowDebug() == 3) o.xyz = float3(sky_vis, 1.0 - sky_vis, 0.0) * 0.5;  // red open, green closed
+  if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);  // red open, green closed
 #endif
   return o * xe_color_exp_bias.x;
 }

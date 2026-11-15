@@ -53,6 +53,8 @@ SPARROW_ONLY = [
     ('shadowbuf.ps.hlsl', 'ps_5_1', [], '0F99810F072BF0FC'),        # screen-space sun shadow buffer
     ('path.ps.hlsl', 'ps_5_1', [], '578342593A37DD35'),             # town cobbles / paths, 4 lights
     ('lit4.ps.hlsl', 'ps_5_1', [], '789266C3E42D7E59'),             # walls / stone near lanterns, 4 lights
+    ('terrain_near.ps.hlsl', 'ps_5_1', [], '45243B758F9272AB'),     # near terrain layers + cliffs, 2 lights
+    ('splat_near.ps.hlsl', 'ps_5_1', [], 'AF1E16EE57E4BB06'),       # near ground splats, 2 lights
 ]
 
 

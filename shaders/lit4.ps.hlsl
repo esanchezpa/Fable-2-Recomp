@@ -136,7 +136,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r5.xyz = r6.yzw * C21.xyz; r6.x = r6.x * r6.x;                         // 49
   r6.xyz = r6.x * r13.xyz + C22.xyz;                                     // 50
   r6.xyz = r5.xyz * r6.xyz + C20.xyz;                                    // 51
-  float sky_vis = 1.0;
+  float sky_vis = -1.0;
 #if SPARROW
   if (SparrowActive()) {
     float3 sun = C87.xyz * C112.x + C88.xyz * C112.y + C89.xyz * C112.z + C90.xyz * C112.w;
@@ -289,7 +289,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r0.xyz = C20.w * C26.xyz;                                              // 158
   float4 o = float4(r0.xyz * r6.yzw, C26.w * r8.x);                      // 159
 #if SPARROW
-  if (SparrowDebug() == 3) o.xyz = float3(sky_vis, 1.0 - sky_vis, 0.0) * 0.5;  // red open, green closed
+  if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);  // red open, green closed
 #endif
   AlphaTest(o.w);
   coverage = AlphaToMask(o.w, input.position.xy);

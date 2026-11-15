@@ -127,6 +127,14 @@ float4 main(PSInput3 input) : SV_Target0 {
   { float s = C87.z * r0.x; r5.xyz = r5.xyz * C21.xyz; r2.z = s; }       // 21
   float3 light = r5.xyz;
   { float3 v = r5.xyz * r4.xyz + C20.xyz; r0.x = v.x; r0.z = v.y; r0.w = v.z; }  // 22
+  float sky_vis = -1.0;
+#if SPARROW
+  // Sparrow: sky light and bounce from the ground ambient grid.
+  if (SparrowActive()) {
+    float3 a = SparrowGroundAmbientLight(float3(r0.x, r0.z, r0.w), input.v1.xyz, normalize(input.v2.xyz), C87.xyz * C11.x, sky_vis);
+    r0.x = a.x; r0.z = a.y; r0.w = a.z;
+  }
+#endif
   bool fog = r0.y > 0.0;
   { float3 v = r3.xyz * float3(r0.x, r0.z, r0.w); r0.x = v.x; r0.z = v.y; r0.w = v.z; }  // 23
   { float3 v = r3.xyz * r2.xyz + float3(r0.x, r0.z, r0.w); r0.x = v.x; r0.z = v.y; r0.w = v.z; }  // 24
@@ -147,6 +155,10 @@ float4 main(PSInput3 input) : SV_Target0 {
   o.xyz = light * 0.5;   // the baked light alone
 #elif DEBUG_VIEW == 2
   o.xyz = sqrt(r3.xyz);  // the colour map alone
+#endif
+#if SPARROW
+  // red open sky, green closed in (sparrow_debug 3)
+  if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);
 #endif
   return o * xe_color_exp_bias.x;
 }
