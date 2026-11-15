@@ -56,6 +56,8 @@ SPARROW_ONLY = [
     ('terrain_near.ps.hlsl', 'ps_5_1', [], '45243B758F9272AB'),     # near terrain layers + cliffs, 2 lights
     ('splat_near.ps.hlsl', 'ps_5_1', [], 'AF1E16EE57E4BB06'),       # near ground splats, 2 lights
     ('character.ps.hlsl', 'ps_5_1', [], '401A01FD4E5F8757'),        # characters: hair, cloth, robes
+    ('character2.ps.hlsl', 'ps_5_1', [], '44B567635EB10620'),       # characters lit by two lights
+    ('character4.ps.hlsl', 'ps_5_1', [], 'F2F103F16764043B'),       # characters lit by four lights
 ]
 
 
