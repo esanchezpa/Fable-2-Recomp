@@ -172,6 +172,7 @@ float4 main(PSInput10 input) : SV_Target0 {
     r0.x = a.x; r0.y = a.y; r0.w = a.z;
   }
 #endif
+  float3 ambient = float3(r0.x, r0.y, r0.w);  // Sparrow: the ambient light, before the albedo
   { float s = sqrt(abs(r0.z)); r1.xyz = r1.xyz * float3(r0.x, r0.y, r0.w); r9.y = s; }  // 69
   if (XeBool(135)) {
     r8 = float4(C255.x == 0.0 ? r4.z : C255.y, C255.x == 0.0 ? r4.x : C255.y,  // 70
@@ -219,6 +220,13 @@ float4 main(PSInput10 input) : SV_Target0 {
   { float3 v = r3.y * C88.xyz; r0.x = v.x; r0.y = v.y; r0.w = v.z; }     // 108
   { float3 v = r3.x * C87.xyz + float3(r0.x, r0.y, r0.w); r0.x = v.x; r0.y = v.y; r0.w = v.z; }  // 109
   { float3 v = float3(r0.x, r0.y, r0.w) * r11.xyz + r1.xyz; r0.x = v.x; r0.y = v.y; r0.w = v.z; }  // 110
+#if SPARROW
+  if (SparrowActive()) {
+    float3 sheen = SparrowGroundSheen(ambient, n_world, r2.xyz) * C11.x;  // the cobbles' faint sky sheen
+    r0.xyw += sheen;
+    if (SparrowDebug() == 2) r0.xyw = sheen;
+  }
+#endif
   if (fog) {
     { float s = C67.w * r9.x; r1.x = saturate(dot(-r2.zxy, C66.zxy)); r1.w = s; }  // 111
     r1.xyz = TF4(r1.x).xyz;                                              // 112

@@ -154,10 +154,18 @@ float4 main(PSInput8c input) : SV_Target0 {
     float3 a = SparrowGroundAmbientLight(r1.xyz, input.v2.xyz, normalize(input.v1.xyz), C87.xyz / max(C11.x, 1e-3), sky_vis);
     r1.xyz = a;
   }
+  float3 ambient = r1.xyz;  // the ambient light, before the albedo
 #endif
   r1.xyz = r3.xyz * r1.xyz;                                              // 38
   bool fog = r7.x > 0.0;
   r0.xyz = r1.xyz * C11.x + r0.xyz;                                      // 39
+#if SPARROW
+  if (SparrowActive()) {
+    float3 sheen = SparrowGroundSheen(ambient, r5.xyz, r2.zyx) * C11.x;  // the cobbles' faint sky sheen
+    r0.xyz += sheen;
+    if (SparrowDebug() == 2) r0.xyz = sheen;
+  }
+#endif
   if (fog) {
     { float s = C67.w * r7.x; r1.x = saturate(dot(-r2.xzy, C66.zxy)); r0.w = s; }  // 40
     r1.xyz = TF4(r1.x).xyz;                                              // 41

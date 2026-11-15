@@ -24,7 +24,7 @@
 #define SPARROW_ROUGHNESS 0.55  // worn stone; the gloss rises in the gaps' wet dirt
 #endif
 #ifndef SPARROW_SKY_REFLECT
-#define SPARROW_SKY_REFLECT 1.0
+#define SPARROW_SKY_REFLECT 0.25  // a faint sheen: the ground beside the cobbles has none, and more draws a seam at their edge
 #endif
 
 // --- SDK translator interface (shaders/xe_common.hlsli) -------------------

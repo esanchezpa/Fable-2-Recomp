@@ -372,6 +372,20 @@ float3 SparrowGroundAmbientLight(float3 ambient, float3 pos, float3 n, float3 su
          SPARROW_BOUNCE_ALBEDO * bounce * saturate(n.z) * sun * SPARROW_BOUNCE;
 }
 
+// The faint sky sheen the cobbles have (path.ps.hlsl, SPARROW_SKY_REFLECT),
+// for the dirt and earth around them: without it the sheen stops at the
+// cobble layer's edge and draws a straight line there. ambient: the
+// material's ambient light (game units, before albedo); v: toward the camera.
+#ifndef SPARROW_GROUND_SHEEN
+#define SPARROW_GROUND_SHEEN 0.25
+#endif
+#ifndef SPARROW_GROUND_ROUGHNESS
+#define SPARROW_GROUND_ROUGHNESS 0.55
+#endif
+float3 SparrowGroundSheen(float3 ambient, float3 n, float3 v) {
+  return ambient * SparrowEnvSpecular(n, v, SPARROW_GROUND_ROUGHNESS, SPARROW_F0) * SPARROW_GROUND_SHEEN;
+}
+
 // sparrow_debug 3: sky visibility as red (open) .. green (closed in), blue
 // where Sparrow does not cover the point (vis < 0) and the game's ambient
 // stays. Through the tonemap, read vis as R / (R + G).

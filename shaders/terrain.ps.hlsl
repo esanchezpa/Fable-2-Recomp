@@ -190,6 +190,7 @@ float4 main(PSInput10 input) : SV_Target0 {
   { float s = exp2(r0.x); r9.y = dot(r3.xzy, r3.xzy); r0.x = s; }        // 56
   { float s = rsqrt(abs(r9.y)); r1.xyz = r1.yzw * r1.x; r9.y = s; }      // 57
   r3.xyz = r3.xyz * r9.y;                                                // 58
+  float3 n_shade = r3.zyx;  // Sparrow: the shading normal in world order
   r2.y = saturate(dot(r2.xzy, r3.xzy));                                  // 59
   r2.z = saturate(dot(r3.xzy, C80.zxy));                                 // 60
   r9.y = dot(r3.xzy, C109.zxy);                                          // 61
@@ -208,8 +209,16 @@ float4 main(PSInput10 input) : SV_Target0 {
     float3 a = SparrowGroundAmbientLight(r2.xyz, input.v4.xyz, normalize(input.v3.xyz) * (input.v3.z < 0.0 ? -1.0 : 1.0), C87.xyz / max(C11.x, 1e-3), sky_vis);
     r2.xyz = a;
   }
+  float3 ambient = r2.xyz;  // the ambient light, before the albedo
 #endif
   r0.xyz = r4.xyz * r2.xyz + r0.xyz;                                     // 69
+#if SPARROW
+  if (SparrowActive()) {
+    float3 sheen = SparrowGroundSheen(ambient, n_shade, r1.xyz) * C11.x;  // the cobbles' faint sky sheen
+    r0.xyz += sheen;
+    if (SparrowDebug() == 2) r0.xyz = sheen;
+  }
+#endif
   if (fog) {
     { float s = C67.w * r9.x; r1.x = saturate(dot(-r1.zxy, C66.zxy)); r0.w = s; }  // 70
     r1.xyz = TF4(r1.x).xyz;                                              // 71
