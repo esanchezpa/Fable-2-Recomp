@@ -42,7 +42,7 @@ public class Fable2ConfigValues
     // [graphics] texture_pack: Modern graphics (the texture pack, filtering, grade
     // and shader rewrites). The launcher turns it off while the pack downloads.
     public bool TexturePack { get; set; } = true;
-    // [graphics] ultra: the Sparrow Edition tier (set with the edition).
+    // [graphics] ultra: Settings > Ultra lighting (on when Enhanced is picked).
     public bool Ultra { get; set; } = false;
 
     public int HotFuncYieldEvery { get; set; } = 1;  // 1 = original, 0 = never yield

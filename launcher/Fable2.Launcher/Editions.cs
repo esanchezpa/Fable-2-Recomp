@@ -6,8 +6,9 @@ namespace Fable2Launcher;
 /// edition doesn't name are left as the player set them.
 /// </summary>
 /// <param name="ModernGraphics">[graphics] texture_pack: AI-upscaled textures, filtering and grade.</param>
-/// <param name="Models">Load the Sparrow model pack (remade models) on top of the game files.</param>
-/// <param name="Ultra">[graphics] ultra: light shafts, a sharper sun shadow map redrawn every frame, stronger AO.</param>
+/// <param name="Models">Load the remade model pack on top of the game files (when the Remade models switch is on).</param>
+/// <param name="Ultra">[graphics] ultra when the edition is picked: light shafts, a sharper sun shadow map redrawn
+/// every frame, stronger AO. Afterwards the Ultra lighting switch owns it.</param>
 public sealed record Edition(
     string Id, string Name, string Summary,
     string Resolution, string RenderScale, string Anisotropic, string AntiAliasing, string FrameLimit,
@@ -18,20 +19,19 @@ public sealed record Edition(
         "720p", "1", "-1", "none", "30",
         DisableMotionBlur: false, HighTickRate: false, HigherHfTickRate: false, ModernGraphics: false, Models: false);
 
-    public static readonly Edition Enhanced = new("enhanced", "Enhanced", "60 fps · 1440p · AI textures",
-        "1440p", "2", "5", "fxaa", "60",
-        DisableMotionBlur: true, HighTickRate: false, HigherHfTickRate: false, ModernGraphics: true, Models: false);
-
-    public static readonly Edition Sparrow = new("sparrow", "Sparrow Edition", "Remade models · Ultra lighting",
+    // Enhanced is what Sparrow Edition was: AI textures, remade models and Ultra lighting, with F8 switching
+    // between Classic and Modern graphics in game. Project Sparrow is now the new-renderer edition (not out yet).
+    public static readonly Edition Enhanced = new("enhanced", "Enhanced", "60 fps · 1440p · remade textures and models",
         "1440p", "2", "5", "fxaa", "60",
         DisableMotionBlur: true, HighTickRate: false, HigherHfTickRate: false, ModernGraphics: true, Models: true,
         Ultra: true);
 
-    public static readonly Edition[] All = [Original, Enhanced, Sparrow];
+    public static readonly Edition[] All = [Original, Enhanced];
 
-    /// <summary>The saved edition. "experimental" (removed) becomes Enhanced; the player's own settings stay.</summary>
+    /// <summary>The saved edition. "experimental" and "sparrow" (both folded into Enhanced) become Enhanced;
+    /// the player's own settings stay.</summary>
     public static Edition Find(string? id) =>
-        id == "experimental" ? Enhanced : All.FirstOrDefault(edition => edition.Id == id) ?? Original;
+        id is "experimental" or "sparrow" ? Enhanced : All.FirstOrDefault(edition => edition.Id == id) ?? Original;
 
     /// <summary>True when the current settings are exactly what this edition sets.</summary>
     public bool Matches(string resolution, string renderScale, string anisotropic, string antiAliasing,
@@ -39,6 +39,5 @@ public sealed record Edition(
         resolution == Resolution && renderScale == RenderScale && anisotropic == Anisotropic &&
         antiAliasing == AntiAliasing && frameLimit == FrameLimit &&
         recomp.DisableMotionBlur == DisableMotionBlur && recomp.HighTickRate == HighTickRate &&
-        recomp.HigherHfTickRate == HigherHfTickRate && recomp.TexturePack == ModernGraphics &&
-        recomp.Ultra == Ultra;
+        recomp.HigherHfTickRate == HigherHfTickRate && recomp.TexturePack == ModernGraphics;
 }

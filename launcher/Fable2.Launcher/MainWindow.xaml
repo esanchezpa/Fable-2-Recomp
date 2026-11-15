@@ -901,10 +901,7 @@
                                Tag="30 fps · 720p · as on Xbox" Checked="EditionChecked" />
                   <Rectangle Width="1" Fill="{DynamicResource GoldLineSoft}" />
                   <RadioButton x:Name="EditionEnhanced" Style="{StaticResource EditionChoice}" Content="Enhanced"
-                               Tag="60 fps · 1440p · AI textures" Checked="EditionChecked" />
-                  <Rectangle Width="1" Fill="{DynamicResource GoldLineSoft}" />
-                  <RadioButton x:Name="EditionSparrow" Style="{StaticResource EditionChoice}" Content="Sparrow Edition"
-                               Tag="Remade models · a modern look" Checked="EditionChecked" />
+                               Tag="60 fps · remade textures and models" Checked="EditionChecked" />
                 </StackPanel>
               </Border>
               <TextBlock x:Name="CustomMarker" Text="Custom changes" FontSize="13.5" Foreground="{StaticResource Ember}"
@@ -1098,6 +1095,17 @@
                       <TextBlock Text="VSync" Style="{StaticResource PageText}" />
                     </DockPanel>
                   </Border>
+                  <Border Style="{StaticResource Row}">
+                    <DockPanel>
+                      <CheckBox x:Name="UltraCheck" DockPanel.Dock="Right" Style="{StaticResource Switch}"
+                                Checked="SettingChanged" Unchecked="SettingChanged" />
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Ultra lighting" Style="{StaticResource PageText}" />
+                        <TextBlock Text="Light shafts, sharper sun shadows, deeper contrast. About 6% slower; Modern graphics only"
+                                   Style="{StaticResource PageHint}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
 
                   <TextBlock Text="MODERN TEXTURES" Style="{StaticResource PageSection}" />
                   <Border Padding="14,12" CornerRadius="6" Background="{DynamicResource WellPage}" BorderBrush="{DynamicResource PageLine}"
@@ -1117,10 +1125,18 @@
                     </StackPanel>
                   </Border>
 
-                  <TextBlock Text="SPARROW MODELS" Style="{StaticResource PageSection}" />
+                  <TextBlock Text="REMADE MODELS" Style="{StaticResource PageSection}" />
                   <Border Padding="14,12" CornerRadius="6" Background="{DynamicResource WellPage}" BorderBrush="{DynamicResource PageLine}"
                           BorderThickness="1">
                     <StackPanel>
+                      <DockPanel Margin="0,0,0,10">
+                        <CheckBox x:Name="RemadeModelsCheck" DockPanel.Dock="Right" Style="{StaticResource Switch}"
+                                  Checked="RemadeModelsChanged" Unchecked="RemadeModelsChanged" />
+                        <StackPanel VerticalAlignment="Center">
+                          <TextBlock Text="Use remade models" Style="{StaticResource PageText}" />
+                          <TextBlock Text="Enhanced only. Takes effect the next time you play" Style="{StaticResource PageHint}" />
+                        </StackPanel>
+                      </DockPanel>
                       <TextBlock x:Name="ModelsStatusText" Style="{StaticResource PageText}" FontSize="14.5" />
                       <TextBlock x:Name="ModelsHintText" Style="{StaticResource PageHint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                       <ProgressBar x:Name="ModelsBar" Style="{StaticResource ThinBar}" Maximum="1" Margin="0,10,0,0"

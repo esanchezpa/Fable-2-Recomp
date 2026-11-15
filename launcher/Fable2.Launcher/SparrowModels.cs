@@ -96,7 +96,7 @@ public static class SparrowModels
         Dictionary<string, Payload> opened = models.Where(pair => pair.Value is not null)
             .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.OrdinalIgnoreCase);
         if (opened.Count == 0)
-            throw new InvalidOperationException("None of the Sparrow models open with your game files. The pack may be for a different version of Fable II.");
+            throw new InvalidOperationException("None of the remade models open with your game files. The pack may be for a different version of Fable II.");
 
         // 2. Model headers.
         progress?.Report(("Updating model headers", 0.6));

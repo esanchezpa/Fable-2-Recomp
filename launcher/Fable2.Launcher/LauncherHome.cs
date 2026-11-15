@@ -18,6 +18,11 @@ public sealed class LauncherSettings
     /// <summary>False until the player picks a channel; until then the installer's channel is used.</summary>
     public bool ChannelChosen { get; set; }
     public string Edition { get; set; } = "original";
+    /// <summary>Settings > Remade models: Enhanced loads the remade model pack when it is installed.</summary>
+    public bool RemadeModels { get; set; } = true;
+    /// <summary>True once Ultra lighting has been switched on for a player who picked Enhanced or Sparrow
+    /// before the switch existed (it defaults to on).</summary>
+    public bool UltraDefaulted { get; set; }
     /// <summary>Window theme: "night", "dusk" (default) or "day".</summary>
     public string Theme { get; set; } = "dusk";
     public bool Migrated { get; set; }

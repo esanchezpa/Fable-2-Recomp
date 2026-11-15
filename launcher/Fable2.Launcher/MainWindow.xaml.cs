@@ -103,7 +103,7 @@ public partial class MainWindow : Window
                 scroll.Start();
             }
             // --preview=models does the same for Sparrow models (PROJECT_SPARROW_MODEL_PACK);
-            // --preview=play presses Play straight away (builds Sparrow Edition first when needed).
+            // --preview=play presses Play straight away (builds the remade models first when needed).
             if (Environment.GetCommandLineArgs().Contains("--preview=models"))
             {
                 OpenPage(TabSettings);
@@ -332,8 +332,17 @@ public partial class MainWindow : Window
             SensitivityBox.Text = _recomp.MouseLookScale.ToString(CultureInfo.InvariantCulture);
             BuildKeybindRows(Fable2ConfigFile.ParseKeybinds(_recomp.KeyboardGamepadMap));
 
-            (edition.Id switch { "enhanced" => EditionEnhanced, "sparrow" => EditionSparrow, _ => EditionOriginal })
-                .IsChecked = true;
+            // Sparrow Edition was folded into Enhanced: Ultra lighting defaults to on for players who already
+            // picked either (new picks get it from the edition).
+            if (!_home.Settings.UltraDefaulted)
+            {
+                if (edition == Edition.Enhanced) { _recomp.Ultra = true; _dirty = true; }
+                _home.Settings.UltraDefaulted = true;
+            }
+            if (_home.Settings.Edition == "sparrow") { _home.Settings.Edition = edition.Id; _dirty = true; }
+            UltraCheck.IsChecked = _recomp.Ultra;
+            RemadeModelsCheck.IsChecked = _home.Settings.RemadeModels;
+            (edition.Id == "enhanced" ? EditionEnhanced : EditionOriginal).IsChecked = true;
             (_home.Settings.Channel == "beta" ? ChannelBeta : ChannelStable).IsChecked = true;
         SetTheme(_home.Settings.Theme, save: false);
             if (fresh) _dirty = true;   // write the edition's settings on first save
@@ -372,6 +381,14 @@ public partial class MainWindow : Window
         _recomp.DirectMouseLook = DirectMouseCheck.IsChecked == true;
         _recomp.MouseLookScale = (int)SensitivitySlider.Value;
         _recomp.KeyboardGamepadMap = CollectKeybinds();
+        _recomp.Ultra = UltraCheck.IsChecked == true;
+    }
+
+    private void RemadeModelsChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _home.Settings.RemadeModels = RemadeModelsCheck.IsChecked == true;
+        try { _home.Save(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     private bool SaveAll(bool quiet = false)
@@ -456,8 +473,7 @@ public partial class MainWindow : Window
     private void EditionChecked(object sender, RoutedEventArgs e)
     {
         if (_loading || sender is not RadioButton { IsChecked: true } choice) return;
-        Edition edition = choice == EditionEnhanced ? Edition.Enhanced
-                        : choice == EditionSparrow ? Edition.Sparrow : Edition.Original;
+        Edition edition = choice == EditionEnhanced ? Edition.Enhanced : Edition.Original;
         _loading = true;
         try
         {
@@ -469,15 +485,15 @@ public partial class MainWindow : Window
             MotionBlurCheck.IsChecked = !edition.DisableMotionBlur;
             HighTickCheck.IsChecked = edition.HighTickRate;
             HigherHfTickCheck.IsChecked = edition.HigherHfTickRate;
+            if (edition.ModernGraphics) UltraCheck.IsChecked = edition.Ultra;
         }
         finally { _loading = false; }
         _home.Settings.Edition = edition.Id;
-        _recomp.Ultra = edition.Ultra;
         if (!edition.ModernGraphics || !TexturesHalfInstalled) SetModernGraphics(edition.ModernGraphics);
-        string name = edition == Edition.Sparrow ? edition.Name : edition.Name + " edition";
+        string name = edition.Name + " edition";
         if (SaveAll())
-            ShowToast(edition.Models && !Models.Available
-                ? $"{name} selected. The model pack isn't installed yet (Settings > Sparrow models), so the original models show for now."
+            ShowToast(edition.Models && _home.Settings.RemadeModels && !Models.Available
+                ? $"{name} selected. The remade models aren't installed yet (Settings > Remade models), so the original models show for now."
                 : $"{name} selected.");
         UpdateCustomMarker();
     }
@@ -539,7 +555,7 @@ public partial class MainWindow : Window
                 GameCompatibilityInspector.Inspect(_home.GameFolder));
             if (!SaveAll()) return;
             ModelPack models = Models;
-            bool sparrow = Edition.Find(_home.Settings.Edition).Models;
+            bool sparrow = Edition.Find(_home.Settings.Edition).Models && _home.Settings.RemadeModels;
             if (sparrow && models.NeedsBuild(plan.GameRoot))
             {
                 BuildThenLaunch();

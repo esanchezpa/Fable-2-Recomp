@@ -434,10 +434,12 @@ try
 
     // Editions: matching decides whether the ribbon shows "Custom changes".
     var stock = new Fable2ConfigValues();
+    stock.TexturePack = false;   // Original runs without Modern graphics
     Require(Edition.Original.Matches("720p", "1", "-1", "none", "30", stock), "Original defaults should match");
     stock.DisableMotionBlur = true;
     Require(!Edition.Original.Matches("720p", "1", "-1", "none", "30", stock), "motion blur change not detected");
-    Require(Edition.Find("nonsense") == Edition.Original && Edition.Find("enhanced") == Edition.Enhanced, "edition lookup");
+    Require(Edition.Find("nonsense") == Edition.Original && Edition.Find("enhanced") == Edition.Enhanced &&
+        Edition.Find("sparrow") == Edition.Enhanced && Edition.Enhanced.Models && Edition.Enhanced.Ultra, "edition lookup");
     foreach (Edition edition in Edition.All)
         GraphicsSettings.Create(edition.Resolution, edition.RenderScale, edition.Anisotropic, edition.AntiAliasing,
             "borderless", true, edition.FrameLimit);   // throws if an edition uses an unsupported value
