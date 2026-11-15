@@ -202,7 +202,9 @@ class Draw:
         repeated for another screen tile can be dropped."""
         vb = tuple((b['fc'], b['blob'], b['size']) for b in self.d['vb'])
         ib = self.d['index']
-        return (self.vs, self.ps, self.prim, self.count, self._consts.tobytes(), vb,
+        # Vertex shader constants only: the tile copies differ in a pixel shader
+        # constant (c0.y) and the scissor.
+        return (self.vs, self.ps, self.prim, self.count, self._consts[:1024].tobytes(), vb,
                 ib['blob'] if ib else None, tuple(map(tuple, self.d['tex'])))
 
     def buffer_words(self, binding):
@@ -293,7 +295,9 @@ class Capture:
 def latest_capture(root):
     frames = [n for n in os.listdir(root) if n.isdigit() and
               os.path.exists(os.path.join(root, n, 'capture.json'))]
-    return os.path.join(root, max(frames, key=int))
+    # Newest by time: frame numbers restart with every game session.
+    return os.path.join(root, max(frames, key=lambda n: os.path.getmtime(
+        os.path.join(root, n, 'capture.json'))))
 
 
 # --- Vertex shader decoders -------------------------------------------------

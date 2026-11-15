@@ -8,9 +8,10 @@ whatever it does (skinning by bone constants, wind, terrain) - the "capture the
 shader's output instead of rebuilding it" route of the Sparrow plan.
 
 Supported: the ALU ops the game's shaders use, co-issued scalar ops, per-vertex
-predication, relative constants (c[N+a0]), vfetch, and forward jumps. Not yet:
-loops and texture fetches (tfetch results read as 0; Program.uses_tfetch says
-when that matters).
+predication, relative constants (c[N+a0]), vfetch, tfetch1D/2D of the textures
+the capture saved for vertex shaders (xtex.py), forward jumps and jumps on bool
+constants, and tessellated quad patches (a regular grid per patch). Not yet:
+loops.
 """
 
 import re
@@ -18,6 +19,7 @@ import re
 import numpy as np
 
 import f2cap
+import xtex
 
 VECTOR_OPS = {'add', 'mul', 'max', 'min', 'seq', 'sgt', 'sge', 'sne', 'frc', 'trunc', 'floor', 'mad',
               'cndeq', 'cndge', 'cndgt', 'dp4', 'dp3', 'dp2add', 'maxa', 'max4'}
@@ -127,7 +129,7 @@ class Program:
                 continue
             if word.startswith(('tfetch', 'getGradients', 'getWeights', 'setTex', 'getBCF', 'getComp')):
                 self.uses_tfetch = True
-                self.instructions.append(('tfetch', pred, args))
+                self.instructions.append(('tfetch', pred, args, word))
                 current = None
                 continue
             base = word[:-4] if word.endswith('_sat') else word
@@ -159,6 +161,7 @@ class Machine:
         self.a0 = np.zeros(n, np.int64)
         self.ps = np.zeros(n)
         self.fetch = None  # (words, base vertex index, stride) of the last vfetch_full
+        self.textures = None  # {fetch constant: xtex.Texture}, loaded on first tfetch
 
     def read(self, s):
         if s.kind == 'r':
@@ -341,17 +344,43 @@ class Machine:
             elif c in '01':
                 reg[rows, i] = float(c)
 
+    def tfetch(self, word, args, rows):
+        if self.textures is None:
+            self.textures = xtex.draw_textures(self.draw)
+        dest = Dest(args[0])
+        slot = int(args[2][2:])
+        tex = self.textures.get(slot)
+        if tex is None or word not in ('tfetch1D', 'tfetch2D'):
+            return
+        opts = dict(a.split('=', 1) for a in args[3:] if '=' in a)
+        coord = self.read(Source(args[1]))
+        linear_mode = opts.get('MagFilter', 'keep')
+        linear = (linear_mode == 'linear') if linear_mode != 'keep' else tex.fetch.mag_filter == 1
+        offset = (float(opts.get('OffsetX', 0.0)), float(opts.get('OffsetY', 0.0)))
+        unnormalized = opts.get('UnnormalizedTextureCoords', 'false') == 'true'
+        v = coord[:, 1] if word == 'tfetch2D' else np.full(self.n, 0.5)
+        value = tex.sample(coord[:, 0], v, linear, offset, unnormalized)
+        reg = self.r[int(dest.name[1:])]
+        for i, c in enumerate(dest.fetch_select[:4]):
+            if c in COMP:
+                reg[rows, i] = value[rows, COMP[c]]
+            elif c in '01':
+                reg[rows, i] = float(c)
+
     def rows(self, active, pred):
         if pred is None:
             return active
         return active & (self.p0 if pred else ~self.p0)
 
-    def run(self, program, vertex_index=None, stop_at_texture=None):
+    def run(self, program, vertex_index=None, stop_at_texture=None, registers=None):
         """vertex_index: what a vertex shader gets in r0.x (index +
-        VGT_INDX_OFFSET). With stop_at_texture, returns the coordinates of the
-        first fetch from that texture fetch constant instead."""
+        VGT_INDX_OFFSET); registers: other starting values, {register: (n, 4)}.
+        With stop_at_texture, returns the coordinates of the first fetch from
+        that texture fetch constant instead."""
         if vertex_index is not None:
             self.r[0, :, 0] = vertex_index
+        for reg, value in (registers or {}).items():
+            self.r[reg] = value
         active = np.ones(self.n, bool)
         waiting = {}  # label -> vertices that jumped to it
         for ins in program.instructions:
@@ -383,8 +412,12 @@ class Machine:
                 continue
             if kind == 'tfetch':
                 args = ins[2]
-                if stop_at_texture is not None and len(args) > 2 and args[2] == f'tf{stop_at_texture}':
-                    return self.read(Source(args[1]))
+                if stop_at_texture is not None:
+                    if len(args) > 2 and args[2] == f'tf{stop_at_texture}':
+                        return self.read(Source(args[1]))
+                    continue
+                if len(args) > 2 and args[2].startswith('tf'):
+                    self.tfetch(ins[3], args, self.rows(active, ins[1]))
                 continue
             ops = ins[1]
             # Co-issued ops read their sources before either writes.
@@ -445,12 +478,71 @@ def texture_coords(draw, outputs, shader_dir, slot=0):
     return None if coords is None else coords[:, :2]
 
 
+PRIM_QUAD_PATCH = 0x12
+
+
+def quad_patch_grid(level):
+    """Domain locations (u, v) of a quad patch split into level x level quads,
+    and its triangles (counter-clockwise in (u, v); the game's terrain then
+    faces up, which its culling state expects)."""
+    k = level + 1
+    v, u = np.mgrid[0:k, 0:k]
+    uv = np.stack([u.ravel(), v.ravel()], 1) / level
+    i = (np.arange(level)[:, None] * k + np.arange(level)[None, :]).ravel()
+    tris = np.concatenate([np.stack([i, i + 1, i + k], 1), np.stack([i + 1, i + k + 1, i + k], 1)])
+    return uv, tris
+
+
+def run_quad_patches(draw, program):
+    """Tessellated quad patches: each patch is split into a regular grid at its
+    largest edge factor (adaptive mode: 4 factors per patch in the "index"
+    buffer) or at VGT_HOS_MAX_TESS_LEVEL, and the shader runs as the domain
+    shader: r0.x = patch index, r0.yz = domain location (u, v), r1.x = 0 (the
+    edge swizzle, identity here)."""
+    mode = draw.reg(0x2285) & 3  # VGT_HOS_CNTL tess_mode: 0 discrete, 1 continuous, 2 adaptive
+    # The hardware's factors are the stored values + 1 (as are the limits).
+    max_level = max(1, int(round(draw.regf(0x2286) + 1.0)))
+    ib = draw.d['index']
+    if mode == 2 and ib is not None:
+        factors = f2cap.swap32(np.frombuffer(draw.cap.blob, '<u4', ib['len'] // 4, ib['blob']),
+                               ib['endian']).view(np.float32)[:draw.count] + 1.0
+        patches = len(factors) // 4
+        levels = [max(1, min(max_level, int(np.ceil(factors[4 * p:4 * p + 4].max()))))
+                  for p in range(patches)]
+    else:
+        patches = draw.count
+        levels = [max_level] * patches
+    uv_all, tris_all, patch_all = [], [], []
+    grids = {}
+    base = 0
+    for p, level in enumerate(levels):
+        if level not in grids:
+            grids[level] = quad_patch_grid(level)
+        uv, tris = grids[level]
+        uv_all.append(uv)
+        tris_all.append(tris + base)
+        patch_all.append(np.full(len(uv), p, dtype=np.float64))
+        base += len(uv)
+    uv = np.concatenate(uv_all)
+    n = len(uv)
+    r0 = np.zeros((n, 4))
+    r0[:, 0] = np.concatenate(patch_all) + draw.reg(f2cap.VGT_INDX_OFFSET)
+    r0[:, 1], r0[:, 2] = uv[:, 0], uv[:, 1]
+    m = Machine(draw, n)
+    out = m.run(program, registers={0: r0, 1: np.zeros((n, 4))})
+    if 'oPos' not in out:
+        raise ValueError('no oPos written')
+    return np.arange(n), np.concatenate(tris_all), out, program
+
+
 def run_draw(draw, shader_dir):
     """Runs a draw's vertex shader over its vertices. Returns (vertex index
     array, triangles, outputs {'oPos': (n,4), 'o0': ...}, program) or None."""
     program = load_program(shader_dir, draw.vs)
     if program is None:
         raise ValueError('no disassembly')
+    if draw.prim == PRIM_QUAD_PATCH:
+        return run_quad_patches(draw, program)
     idx, tris = draw.triangles()
     if len(tris) == 0:
         return None
