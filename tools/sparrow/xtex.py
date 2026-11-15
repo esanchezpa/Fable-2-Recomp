@@ -14,6 +14,8 @@ import f2cap
 # uncompressed formats vertex shaders have been seen to read so far.
 FORMATS = {
     2: (1, 1, 'u8'),         # k_8
+    3: (2, 4, 'p1555'),      # k_1_5_5_5 (a1 r5 g5 b5 from the top bit)
+    4: (2, 3, 'p565'),       # k_5_6_5
     6: (4, 4, 'u8x4'),       # k_8_8_8_8
     24: (2, 1, 'u16'),       # k_16
     25: (4, 2, 'u16x2'),     # k_16_16
@@ -28,6 +30,9 @@ FORMATS = {
 }
 # Block-compressed formats: (bytes per 4x4 block, components, decoder name).
 BLOCK_FORMATS = {
+    18: (8, 4, 'dxt1'),      # k_DXT1
+    19: (16, 4, 'dxt3'),     # k_DXT2_3
+    20: (16, 4, 'dxt5'),     # k_DXT4_5
     49: (16, 2, 'dxn'),      # k_DXN: two BC4 blocks (x, y)
     58: (8, 1, 'dxt3a'),     # k_DXT3A: 4-bit alpha per texel
     59: (8, 1, 'bc4'),       # k_DXT5A: one BC4 block
@@ -52,6 +57,28 @@ def _bc4(blocks):
     pal[:, 6] = np.where(big, pal[:, 6], 0.0)
     pal[:, 7] = np.where(big, pal[:, 7], 255.0)
     return np.take_along_axis(pal, idx, 1) / 255.0
+
+
+def _dxt_colour(blocks, four_colour_only=False):
+    """(n, 8) uint8 DXT colour blocks -> (n, 16, 4) RGBA 0..1 (alpha 0 only for
+    DXT1's transparent index)."""
+    c0 = blocks[:, 0].astype(np.int64) | (blocks[:, 1].astype(np.int64) << 8)
+    c1 = blocks[:, 2].astype(np.int64) | (blocks[:, 3].astype(np.int64) << 8)
+
+    def rgb(c):
+        return np.stack([((c >> 11) & 31) / 31.0, ((c >> 5) & 63) / 63.0, (c & 31) / 31.0], 1)
+    a, b = rgb(c0), rgb(c1)
+    four = (c0 > c1) | four_colour_only
+    pal = np.zeros((len(blocks), 4, 4))
+    pal[:, 0, :3], pal[:, 1, :3] = a, b
+    pal[:, :, 3] = 1.0
+    pal[:, 2, :3] = np.where(four[:, None], (2 * a + b) / 3.0, (a + b) / 2.0)
+    pal[:, 3, :3] = np.where(four[:, None], (a + 2 * b) / 3.0, 0.0)
+    pal[:, 3, 3] = np.where(four, 1.0, 0.0)
+    bits = (blocks[:, 4].astype(np.int64) | (blocks[:, 5].astype(np.int64) << 8) |
+            (blocks[:, 6].astype(np.int64) << 16) | (blocks[:, 7].astype(np.int64) << 24))
+    idx = np.stack([(bits >> (2 * t)) & 3 for t in range(16)], 1)
+    return np.take_along_axis(pal, idx[:, :, None], 1)
 
 
 class FetchConstant:
@@ -120,7 +147,14 @@ class Texture:
         elif f.endian == 3:  # 16in32
             texels = texels.reshape(-1, max(bpp // 4, 1), 2, 2)[:, :, ::-1, :].reshape(-1, bpp)
         texels = np.ascontiguousarray(texels)
-        if kind in ('u8', 'u8x4'):
+        if kind in ('p1555', 'p565'):
+            p = texels.view('<u2').astype(np.int64).ravel()
+            if kind == 'p1555':
+                v = np.stack([(p & 31) / 31.0, ((p >> 5) & 31) / 31.0, ((p >> 10) & 31) / 31.0,
+                              (p >> 15) & 1], 1).astype(np.float64)
+            else:
+                v = np.stack([(p & 31) / 31.0, ((p >> 5) & 63) / 63.0, ((p >> 11) & 31) / 31.0], 1)
+        elif kind in ('u8', 'u8x4'):
             v = texels.astype(np.float64)
             v = (v - 256 * (v >= 128)) / 127.0 if f.signs[0] == 1 else v / 255.0
         elif kind in ('u16', 'u16x2', 'u16x4'):
@@ -149,7 +183,18 @@ class Texture:
         elif f.endian == 2:
             blocks = blocks.reshape(-1, bpb // 4, 4)[:, :, ::-1].reshape(-1, bpb)
         blocks = np.ascontiguousarray(blocks)
-        if kind == 'dxt3a':
+        if kind in ('dxt1', 'dxt3', 'dxt5'):
+            if kind == 'dxt1':
+                rgba = _dxt_colour(blocks)
+            else:
+                rgba = _dxt_colour(blocks[:, 8:], four_colour_only=True)
+                if kind == 'dxt3':
+                    rgba[:, :, 3] = np.stack([(blocks[:, t // 2] >> (4 * (t % 2))) & 15
+                                              for t in range(16)], 1) / 15.0
+                else:
+                    rgba[:, :, 3] = _bc4(blocks[:, :8])
+            chans = [rgba[:, :, c] for c in range(4)]
+        elif kind == 'dxt3a':
             vals = np.stack([(blocks[:, t // 2] >> (4 * (t % 2))) & 15 for t in range(16)], 1) / 15.0
             chans = [vals]
         elif kind == 'bc4':

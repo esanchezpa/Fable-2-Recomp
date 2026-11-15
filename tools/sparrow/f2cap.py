@@ -190,6 +190,11 @@ class Draw:
         return bool(self.reg(RB_COLORCONTROL) & 0x8)
 
     @property
+    def ptex(self):
+        """{slot: raw memory entry} of pixel shader textures with no dump hash."""
+        return {e['fc']: e for e in self.d.get('ptex', [])}
+
+    @property
     def blend(self):
         return self.reg(RB_BLENDCONTROL0)
 
@@ -204,8 +209,11 @@ class Draw:
         ib = self.d['index']
         # Vertex shader constants only: the tile copies differ in a pixel shader
         # constant (c0.y) and the scissor.
+        # Plus the context state that changes what is drawn: the index offset
+        # (terrain draws one patch per draw, told apart only by it) and blending.
         return (self.vs, self.ps, self.prim, self.count, self._consts[:1024].tobytes(), vb,
-                ib['blob'] if ib else None, tuple(map(tuple, self.d['tex'])))
+                ib['blob'] if ib else None, tuple(map(tuple, self.d['tex'])),
+                self.reg(VGT_INDX_OFFSET), self.blend)
 
     def buffer_words(self, binding):
         if binding['blob'] is None:
