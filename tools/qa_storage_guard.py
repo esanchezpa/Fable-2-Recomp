@@ -273,6 +273,7 @@ def run_guarded(argv: list[str], repo_root: Path | str, root: Path | str = MANAG
         "owner": OWNER,
         "run_id": run_id,
         "status": "running",
+        "supervisor_pid": os.getpid(),
         "repository": str(repository),
         "managed_root": str(managed),
         "temporary_directory": str(temp_dir),
@@ -366,6 +367,120 @@ def run_guarded(argv: list[str], repo_root: Path | str, root: Path | str = MANAG
                       "run_id": run_id, "run_record": str(manifest_path),
                       "log": str(log_path), "reason": reason_text}, indent=2))
     return return_code
+
+
+def reconcile_stale_runs(root: Path | str = MANAGED_ROOT,
+                         run_ids: list[str] | None = None,
+                         apply: bool = False) -> list[dict[str, object]]:
+    """Report or conservatively reclassify runs whose supervisor and child are absent.
+
+    An external host can terminate this supervisor before it writes a final status.
+    Reconciliation records only process absence at inspection; it never invents an
+    exit code, end time, successful termination, or the cause of interruption.
+    """
+    managed = validate_managed_root(root)
+    if apply and not run_ids:
+        raise GuardError("Applying stale-run reconciliation requires at least one explicit run ID")
+    runs = managed / "fable2-active" / "runs"
+    if runs.is_symlink() or (hasattr(os.path, "isjunction") and os.path.isjunction(runs)):
+        raise GuardError(f"Refusing to inspect a reparse point: {runs}")
+    if not runs.exists():
+        return []
+    requested = set(run_ids) if run_ids is not None else None
+    if requested is not None:
+        for run_id in requested:
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", run_id):
+                raise GuardError(f"Invalid run ID: {run_id}")
+    results: list[dict[str, object]] = []
+    for run_dir in sorted(runs.iterdir()):
+        if (not run_dir.is_dir() or run_dir.is_symlink()
+                or (hasattr(os.path, "isjunction") and os.path.isjunction(run_dir))):
+            continue
+        if requested is not None and run_dir.name not in requested:
+            continue
+        manifest = run_dir / "run.json"
+        if (manifest.is_symlink()
+                or (hasattr(os.path, "isjunction") and os.path.isjunction(manifest))):
+            results.append({"run_id": run_dir.name, "action": "manual-review-reparse-point"})
+            continue
+        if not manifest.is_file():
+            continue
+        try:
+            original_bytes = manifest.read_bytes()
+            record = json.loads(original_bytes.decode("utf-8-sig"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            results.append({"run_id": run_dir.name, "action": "invalid-record", "reason": str(exc)})
+            continue
+        if not isinstance(record, dict):
+            results.append({"run_id": run_dir.name, "action": "invalid-record",
+                            "reason": "run record must contain a JSON object"})
+            continue
+        if record.get("owner") != OWNER or record.get("status") != "running":
+            continue
+
+        supervisor_pid = record.get("supervisor_pid", record.get("guard_pid"))
+        if not isinstance(supervisor_pid, int) or supervisor_pid <= 0:
+            # Older records encode the supervisor PID in the guard-generated run ID.
+            match = re.fullmatch(r"\d{8}T\d{6}Z-(\d+)-[0-9a-fA-F]{8}",
+                                 str(record.get("run_id", run_dir.name)))
+            supervisor_pid = int(match.group(1)) if match else 0
+        child_pid = record.get("child_pid")
+        if not isinstance(child_pid, int) or child_pid <= 0 or supervisor_pid <= 0:
+            results.append({"run_id": run_dir.name, "action": "manual-review-missing-pids"})
+            continue
+
+        supervisor_alive = _pid_is_alive(supervisor_pid)
+        child_alive = _pid_is_alive(child_pid)
+        if supervisor_alive or child_alive:
+            results.append({"run_id": run_dir.name, "action": "still-active",
+                            "supervisor_alive": supervisor_alive, "child_alive": child_alive})
+            continue
+
+        result: dict[str, object] = {
+            "run_id": run_dir.name,
+            "action": "would-mark-interrupted",
+        }
+        if apply:
+            backup = manifest.with_name("run.json.pre-reconcile")
+            if backup.exists():
+                if backup.read_bytes() != original_bytes:
+                    results.append({"run_id": run_dir.name,
+                                    "action": "preserved-conflicting-backup"})
+                    continue
+            else:
+                try:
+                    with backup.open("xb") as stream:
+                        stream.write(original_bytes)
+                except FileExistsError:
+                    # Another reconciler won the race; only proceed if it saved
+                    # this exact still-running record as the original.
+                    if backup.read_bytes() != original_bytes:
+                        results.append({"run_id": run_dir.name,
+                                        "action": "preserved-conflicting-backup"})
+                        continue
+            reconciled = dict(record)
+            reconciled.update({
+                "status": "interrupted",
+                "reason": "Supervisor and child were absent at reconciliation; exit cause is unknown",
+                "reconciliation": {
+                    "observed_utc": datetime.now(timezone.utc).isoformat(),
+                    "observer_pid": os.getpid(),
+                    "supervisor_pid": supervisor_pid,
+                    "child_pid": child_pid,
+                    "supervisor_alive": False,
+                    "child_alive": False,
+                    "exit_code": None,
+                    "termination_cause": "unknown",
+                },
+            })
+            _atomic_json(manifest, reconciled)
+            result.update({"action": "marked-interrupted", "backup": str(backup)})
+        results.append(result)
+    if requested is not None:
+        found = {str(item.get("run_id")) for item in results}
+        for run_id in sorted(requested - found):
+            results.append({"run_id": run_id, "action": "not-found-or-not-running"})
+    return results
 
 
 def verify_build_child(manifest: Path | str, nonce: str, guard_pid: int,
@@ -598,6 +713,17 @@ def main(argv: list[str] | None = None) -> int:
     cleanup = subparsers.add_parser("cleanup-temp", help="prune old marked temp dirs only")
     cleanup.add_argument("--older-than-days", type=int, default=7)
     cleanup.add_argument("--apply", action="store_true", help="perform the listed temp-only removals")
+    reconcile = subparsers.add_parser(
+        "reconcile-stale", help="report or explicitly reconcile stale guarded run records"
+    )
+    reconcile.add_argument(
+        "--run-id", action="append",
+        help="limit reconciliation to this exact run ID; repeatable",
+    )
+    reconcile.add_argument(
+        "--apply", action="store_true",
+        help="mark selected inactive runs interrupted, preserving original run.json",
+    )
     mark = subparsers.add_parser("mark-build-dir", help=argparse.SUPPRESS)
     mark.add_argument("--repo-root", required=True)
     mark.add_argument("--config", required=True)
@@ -640,6 +766,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode == "cleanup-temp":
             print(json.dumps(cleanup_old_temp(root=MANAGED_ROOT, older_than_days=args.older_than_days,
                                              apply=args.apply), indent=2))
+            return 0
+        if args.mode == "reconcile-stale":
+            print(json.dumps(reconcile_stale_runs(root=MANAGED_ROOT, run_ids=args.run_id,
+                                                  apply=args.apply), indent=2))
             return 0
         if args.mode == "mark-build-dir":
             result = mark_build_dir(args.repo_root, args.config)

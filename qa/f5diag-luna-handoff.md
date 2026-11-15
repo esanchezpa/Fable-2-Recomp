@@ -17,6 +17,8 @@ Validar en gameplay real el comando de consola `f5diag` (commit `f34ff44`) en el
 
 Lanzar el guard con `PATH` que omite `C:\Users\edgar\RenderDoc\RenderDoc_1.47_64`. En PowerShell (solo sesión actual):
 
+**Deadline anidado obligatorio:** el guard de este comando usa 300 s. La llamada host de OpenCode debe usar `timeout=360000` ms como mínimo (300 s más 60 s para terminar el árbol y escribir el registro); no usar el timeout host predeterminado de 120 s. Si el host no admite ese margen, no iniciar el juego.
+
 ```powershell
 $rd = "C:\Users\edgar\RenderDoc\RenderDoc_1.47_64"
 $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -ne $rd }) -join ';'

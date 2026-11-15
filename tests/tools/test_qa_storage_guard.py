@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -135,6 +136,7 @@ class StoragePolicyTests(unittest.TestCase):
                 self.assertEqual(exit_code, 124)
                 record = json.loads(manifests[0].read_text(encoding="utf-8"))
                 self.assertEqual(record["status"], "timeout")
+                self.assertEqual(record["supervisor_pid"], os.getpid())
                 self.assertTrue(record["termination_verified"])
                 self.assertFalse(guard._pid_is_alive(record["child_pid"]))
             self.assertIsNone(unrelated.poll(), "an unrelated process must remain running")
@@ -171,6 +173,113 @@ class StoragePolicyTests(unittest.TestCase):
         finally:
             unrelated.terminate()
             unrelated.wait(timeout=10)
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_stale_run_reconciliation_is_dry_run_by_default(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            managed = Path(temporary)
+            run_dir = managed / "fable2-active" / "runs" / "20261115T004931Z-33712-00bb0825"
+            run_dir.mkdir(parents=True)
+            record = {
+                "owner": guard.OWNER,
+                "run_id": run_dir.name,
+                "status": "running",
+                "child_pid": 36668,
+            }
+            manifest = run_dir / "run.json"
+            original = json.dumps(record).encode("utf-8")
+            manifest.write_bytes(original)
+
+            with mock.patch.object(guard, "_pid_is_alive", return_value=False):
+                results = guard.reconcile_stale_runs(managed)
+
+            self.assertEqual(results[0]["action"], "would-mark-interrupted")
+            self.assertEqual(manifest.read_bytes(), original)
+            self.assertFalse((run_dir / "run.json.pre-reconcile").exists())
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_stale_run_reconciliation_records_unknown_exit_without_claiming_timeout(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            managed = Path(temporary)
+            run_dir = managed / "fable2-active" / "runs" / "20261115T004931Z-33712-00bb0825"
+            run_dir.mkdir(parents=True)
+            record = {
+                "owner": guard.OWNER,
+                "run_id": run_dir.name,
+                "status": "running",
+                "supervisor_pid": 33712,
+                "child_pid": 36668,
+            }
+            manifest = run_dir / "run.json"
+            original = json.dumps(record).encode("utf-8")
+            manifest.write_bytes(original)
+
+            with mock.patch.object(guard, "_pid_is_alive", return_value=False):
+                results = guard.reconcile_stale_runs(managed, run_ids=[run_dir.name], apply=True)
+
+            updated = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(results[0]["action"], "marked-interrupted")
+            self.assertEqual(updated["status"], "interrupted")
+            self.assertEqual(
+                updated["reason"],
+                "Supervisor and child were absent at reconciliation; exit cause is unknown",
+            )
+            self.assertNotIn("return_code", updated)
+            self.assertNotIn("ended_utc", updated)
+            self.assertNotIn("termination_verified", updated)
+            self.assertEqual((run_dir / "run.json.pre-reconcile").read_bytes(), original)
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_stale_run_reconciliation_does_not_reclassify_a_live_supervisor(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            managed = Path(temporary)
+            run_dir = managed / "fable2-active" / "runs" / "live-run"
+            run_dir.mkdir(parents=True)
+            manifest = run_dir / "run.json"
+            manifest.write_text(json.dumps({
+                "owner": guard.OWNER,
+                "run_id": run_dir.name,
+                "status": "running",
+                "supervisor_pid": 33712,
+                "child_pid": 36668,
+            }), encoding="utf-8")
+
+            with mock.patch.object(guard, "_pid_is_alive", side_effect=lambda pid: pid == 33712):
+                results = guard.reconcile_stale_runs(managed, run_ids=[run_dir.name], apply=True)
+
+            self.assertEqual(results[0]["action"], "still-active")
+            self.assertEqual(json.loads(manifest.read_text(encoding="utf-8"))["status"], "running")
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_stale_run_reconciliation_requires_explicit_ids_for_mutation(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            with self.assertRaises(guard.GuardError):
+                guard.reconcile_stale_runs(Path(temporary), apply=True)
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_stale_run_reconciliation_leaves_non_object_records_untouched(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            managed = Path(temporary)
+            run_dir = managed / "fable2-active" / "runs" / "bad-record"
+            run_dir.mkdir(parents=True)
+            manifest = run_dir / "run.json"
+            original = b"[]"
+            manifest.write_bytes(original)
+
+            results = guard.reconcile_stale_runs(managed)
+
+            self.assertEqual(results[0]["action"], "invalid-record")
+            self.assertEqual(manifest.read_bytes(), original)
 
     @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
     def test_real_supervisor_caps_trace_file_and_keeps_it(self):

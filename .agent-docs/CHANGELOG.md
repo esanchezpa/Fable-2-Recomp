@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Changed
+- Added exact-run stale-record reconciliation for externally interrupted QA supervisors; snapshots the original record and records process absence without fabricating exit codes, end time, or verified termination. Added supervisor PID metadata, regression tests, and host-timeout margins to the gameplay handoff.
+- Recorded a bounded visual input check: one title-screen pad input was followed by an attract-scene image, with no menu/gameplay transition; the shell timeout prevented normal guard finalization, while saves and restored QA state/scripts were verified.
+- Added an offline comparison of the guarded title-screen input attempt with the prior staged-pad gameplay navigation; recorded the limits of the evidence and a visual validation hypothesis without assigning cause.
 - Resolve the optional sampler from the shared Lua global on every persistent F5 updater frame, allowing a later F5 evaluation to publish it after an earlier load attempt; add a source-contract regression check. Runtime gameplay validation remains pending.
 - Documented RenderDoc PATH injection evidence: three WER crashes name `renderdoc.dll_unloaded`, A/B guard runs show crash with RenderDoc in PATH vs 60 s stability without it, no IFEO/AppInit/global hook, and a controlled test protocol that varies only the child PATH without system changes.
 - Recorded the guarded `f5diag` runtime attempt: the clone remained at title/menu, the console pump explicitly dropped the command before invoking its handler, WER startup crashes named `renderdoc.dll_unloaded` without persistent dumps, and restoration verified all 40 QA saves plus the manifest; no sampler cause is inferred.
