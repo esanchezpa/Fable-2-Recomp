@@ -75,7 +75,7 @@ uniform sampler2D shadow;
 uniform int has_albedo;
 uniform int has_cliff;
 uniform int has_shadow;
-uniform int material;  // 0 plain, 1 terrain layer (pixel shader 9C2144E4), 2 water, 3 sky
+uniform int material;  // 0 plain, 1 terrain layer (pixel shader 9C2144E4), 2 water, 3 sky, 4 impostor
 uniform vec3 eye;
 uniform vec2 cliff_ab; // the layer shader's c45.xy: grass weight = sat(|n.z| * b + a)
 uniform int alpha_test;
@@ -140,18 +140,21 @@ void main() {
         frag = vec4(c, 1.0);
         return;
     }
-    vec4 a = material == 1 ? terrain()
+    // Tree impostors: the baked colour is linear; shown like other albedo.
+    vec4 a = material == 4 ? (has_albedo != 0 ? sqrt(texture(albedo, v_uv)) : vec4(0.3))
+           : material == 1 ? terrain()
            : has_albedo != 0 ? texture(albedo, v_uv) : vec4(0.6, 0.6, 0.6, 1.0);
     if (alpha_test != 0 && a.a < 0.5) discard;
     vec3 n = normalize(v_normal);
     if (mode == 2) { frag = vec4(n * 0.5 + 0.5, 1.0); return; }
     if (mode == 3) { frag = vec4(id_color, 1.0); return; }
-    vec3 c = material == 1 ? a.rgb : a.rgb * v_color.rgb;
+    vec3 c = material >= 1 ? a.rgb : a.rgb * v_color.rgb;
     if (mode == 0) {
         float l = max(dot(n, sun_dir), 0.0);
         // Baked terrain lightmap (shadows of buildings and trees) when there is one.
         float s = has_shadow != 0 ? texture(shadow, v_uv4).r : 1.0;
-        c *= 0.45 * mix(0.6, 1.0, s) + 0.75 * l * s;
+        // Sky ambient (cool, dimmer in the lightmap's shadows) + warm sun.
+        c *= vec3(0.40, 0.43, 0.50) * mix(0.6, 1.0, s) + vec3(1.0, 0.90, 0.72) * 1.15 * l * s;
     }
     frag = fog(vec4(c, material == 1 ? a.a : 1.0));
 }
@@ -251,7 +254,7 @@ def colour_pass_meshes(cap, shader_dir, only=None):
             tris = tris[finite[tris].all(1)]
             pos = np.where(finite[:, None], pos, 0.0)
             out = {k: np.where(finite[:, None], v, 0.0) for k, v in out.items()}
-        if d.ps.startswith(TERRAIN_LAYER_PS):
+        if is_terrain_layer(d):
             mesh = terrain_layer_mesh(d, pos, tris, out)
             if mesh is not None:
                 meshes.append(mesh)
@@ -260,6 +263,16 @@ def colour_pass_meshes(cap, shader_dir, only=None):
             mesh = f2cap.Mesh(d, pos, tris, np.tile([0.0, 0.0, 1.0], (len(pos), 1)), out['o1'][:, :2])
             mesh.uv2 = out['o1'][:, 2:4]
             mesh.material, mesh.albedo, mesh.cull = 2, d.textures.get(2), gl_cull_face(d)
+            meshes.append(mesh)
+            continue
+        if (d.blend & 0x1F) in (8, 9) and (d.blend >> 8) & 0x1F == 0:
+            # Multiply decals (src = dst colour): blob shadows under characters.
+            # Not drawn yet: they darken what is below, which needs its colour.
+            continue
+        if d.ps.startswith(IMPOSTOR_PS):
+            uv, albedo = draw_albedo(d, out, shader_dir)
+            mesh = f2cap.Mesh(d, pos, tris, np.tile([0.0, 0.0, 1.0], (len(pos), 1)), uv)
+            mesh.material, mesh.albedo, mesh.cull = 4, albedo, gl_cull_face(d)
             meshes.append(mesh)
             continue
         if d.ps.startswith(SKY_PS):
@@ -275,25 +288,55 @@ def colour_pass_meshes(cap, shader_dir, only=None):
         mesh.cull = gl_cull_face(d)
         mesh.albedo = albedo
         meshes.append(mesh)
+    normalize_terrain_weights(meshes)
     for vs, why in reasons.items():
         print(f'vs {vs}: {why}')
     return meshes, skipped, vp, spread
+
+
+def normalize_terrain_weights(meshes):
+    """Scale the near terrain layers' mask weights to sum to 1 at each point.
+    In the game the coarse terrain below supplies what the layers leave out
+    (through its runtime palette, which the capture doesn't have); here the
+    coarse terrain is hidden under the layers instead, so they must cover
+    fully. Points no layer claims get an even mix."""
+    layers = [m for m in meshes if getattr(m, 'material', 0) == 1 and is_terrain_layer(m.draw)]
+    if not layers:
+        return
+    keys = [np.round(m.position[:, :2] * 8).astype(np.int64) for m in layers]
+    total, count = {}, {}
+    for m, k in zip(layers, keys):
+        used = np.zeros(len(m.position), bool)
+        used[m.tris.ravel()] = True
+        for kk, a in zip(map(tuple, k[used]), m.color[used, 3]):
+            total[kk] = total.get(kk, 0.0) + float(a)
+            count[kk] = count.get(kk, 0) + 1
+    for m, k in zip(layers, keys):
+        t = np.array([total.get(kk, 1.0) for kk in map(tuple, k)])
+        n = np.array([count.get(kk, 1) for kk in map(tuple, k)])
+        m.color[:, 3] = np.where(t > 0.05, m.color[:, 3] / np.maximum(t, 1e-6), 1.0 / n)
 
 
 # Pixel shaders whose albedo isn't the first dumped texture: {ps hash prefix: slot}.
 ALBEDO_SLOT = {
     '4B1D3E6E': 0,   # tree impostors: billboards the game bakes at runtime (from ptex)
 }
-# Terrain layer pixel shaders and where each reads its inputs (vertex shader
-# outputs): layer texture uv, cliff texture uvs (projected along x and y),
-# slope normal, lightmap uv, and the register whose w is the mask weight.
+# Terrain layer vertex shaders and where their pixel shaders read their inputs
+# (vertex shader outputs): layer texture uv, cliff texture uvs (projected along
+# x and y), slope normal, lightmap uv, and the register whose w is the mask
+# weight. Each comes with several pixel shader variants (with or without the
+# sun shadow map, lights...) that read the same inputs.
 TERRAIN_LAYERS = {
-    '9C2144E4': {'uv': 'o2', 'cliff': ('o0', 'o1'), 'normal': 'o3', 'lightmap': 'o5', 'alpha': 'o9'},
-    '4755A2E4': {'uv': 'o0', 'cliff': None, 'normal': None, 'lightmap': 'o3', 'alpha': 'o7'},
+    'C30A97D9': {'uv': 'o2', 'cliff': ('o0', 'o1'), 'normal': 'o3', 'lightmap': 'o5', 'alpha': 'o9'},
+    'FB68A7F2': {'uv': 'o0', 'cliff': None, 'normal': None, 'lightmap': 'o3', 'alpha': 'o7'},
 }
-TERRAIN_LAYER_PS = tuple(TERRAIN_LAYERS)
+
+
+def is_terrain_layer(d):
+    return d.vs.startswith(tuple(TERRAIN_LAYERS)) and d.textures.get(0, '0' * 16) != '0' * 16
 WATER_PS = ('2B091BD0',)
 SKY_PS = ('F7601FBE',)
+IMPOSTOR_PS = ('4B1D3E6E',)
 # Coarse terrain: its own colour texture (tf13) is a tiny runtime bake that the
 # capture doesn't get back, so it gets the layer material (dominant layer
 # texture + cliff by slope) in world space instead.
@@ -304,7 +347,7 @@ def terrain_palette(draws):
     """The layer texture most terrain layers use (grass), the cliff texture,
     and the slope weights, from the frame's terrain layer draws."""
     from collections import Counter
-    layers = [d for d in draws if d.ps.startswith('9C2144E4')]
+    layers = [d for d in draws if is_terrain_layer(d) and d.vs.startswith('C30A97D9')]
     if not layers:
         return None
     grass = Counter(d.textures.get(0) for d in layers).most_common(1)[0][0]
@@ -368,7 +411,7 @@ def terrain_layer_mesh(d, pos, tris, out):
     """A terrain layer draw with what its pixel shader reads (TERRAIN_LAYERS):
     layer texture tf0, cliff texture tf13, lightmap tf3, and the mask weight
     that the draw's blend state uses as alpha. None if an input is missing."""
-    io = next(v for k, v in TERRAIN_LAYERS.items() if d.ps.startswith(k))
+    io = next(v for k, v in TERRAIN_LAYERS.items() if d.vs.startswith(k))
     regs = [io['uv'], io['lightmap'], io['alpha']] + list(io['cliff'] or []) + [io['normal']] * bool(io['normal'])
     if any(rg not in out for rg in regs):
         return None
@@ -393,6 +436,17 @@ def terrain_layer_mesh(d, pos, tris, out):
 BLEND_FACTORS = {0: 'ZERO', 1: 'ONE', 4: 'SRC_COLOR', 5: 'ONE_MINUS_SRC_COLOR', 6: 'SRC_ALPHA',
                  7: 'ONE_MINUS_SRC_ALPHA', 8: 'DST_COLOR', 9: 'ONE_MINUS_DST_COLOR',
                  10: 'DST_ALPHA', 11: 'ONE_MINUS_DST_ALPHA'}
+
+
+def game_sun(draws):
+    """The sun direction the terrain shaders light with (PS c80, world space),
+    or a default."""
+    for d in draws:
+        if d.vs.startswith('C30A97D9'):
+            v = d.ps_const(80)[:3]
+            if np.isfinite(v).all() and np.linalg.norm(v) > 0.5:
+                return tuple(float(x) for x in v)
+    return (0.3, 0.4, 0.85)
 
 
 def gl_blend(draw):
@@ -446,6 +500,7 @@ class Scene:
         self.prog = ctx.program(vertex_shader=VERTEX, fragment_shader=FRAGMENT)
         self.items = []
         self.cull = True  # match the game's backface culling (B toggles it in --fly)
+        self.sun = game_sun([m.draw for m in meshes])
         for m in meshes:
             n = len(m.position)
             normal = m.normal if m.normal is not None else np.tile([0.0, 0.0, 1.0], (n, 1))
@@ -492,7 +547,7 @@ class Scene:
         if name in self.prog:
             self.prog[name].value = value
 
-    def draw(self, view_proj, mode=0, sun=(0.3, 0.4, 0.85), target=None):
+    def draw(self, view_proj, mode=0, sun=None, target=None):
         """target: the framebuffer being drawn into (its colour mask is
         switched off for the depth pre-pass)."""
         self.prog['view_proj'].write(view_proj.T.astype('f4').tobytes())
@@ -500,6 +555,7 @@ class Scene:
         m = view_proj[[0, 1, 3]]
         self._set('eye', tuple(float(x) for x in np.linalg.solve(m[:, :3], -m[:, 3])))
         self.prog['mode'].value = mode
+        sun = sun if sun is not None else self.sun
         s = np.array(sun) / np.linalg.norm(sun)
         self.prog['sun_dir'].value = tuple(s)
         ctx = self.ctx

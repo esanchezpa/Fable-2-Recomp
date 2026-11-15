@@ -85,6 +85,7 @@ class Program:
         self.uses_tfetch = False
         self.has_loop = False
         current = None
+        cond_open = False
         for raw in text.splitlines():
             line = re.sub(r'^\s*/\*.*?\*/', '', raw).strip()
             if not line:
@@ -98,9 +99,26 @@ class Program:
                 pred = m.group(1) != '!'
                 line = m.group(2)
             word, _, rest = line.partition(' ')
-            if word in ('exec', 'exece', 'alloc', 'cnop', 'nop', 'serialize', 'cexec'):
+            if word in ('exec', 'exece', 'alloc', 'cnop', 'nop', 'cexec'):
+                # A control-flow line ends the previous exec block; cexec
+                # [!]b<N> starts one that only runs when that bool is set.
+                if cond_open:
+                    self.instructions.append(('endcond',))
+                    cond_open = False
+                if word == 'cexec':
+                    cond = rest.strip().split()[0] if rest.strip() else ''
+                    if cond.lstrip('!').startswith('b'):
+                        self.instructions.append(('cond', cond.startswith('!'),
+                                                  int(cond.lstrip('!b'))))
+                        cond_open = True
                 current = None
                 continue
+            if word == 'serialize':
+                current = None
+                continue
+            if cond_open and word in ('label', 'jmp', 'cjmp', 'loop', 'endloop', 'call', 'ret'):
+                self.instructions.append(('endcond',))
+                cond_open = False
             if word == 'label':
                 self.instructions.append(('label', rest.strip()))
                 current = None
@@ -130,6 +148,10 @@ class Program:
             if word.startswith(('tfetch', 'getGradients', 'getWeights', 'setTex', 'getBCF', 'getComp')):
                 self.uses_tfetch = True
                 self.instructions.append(('tfetch', pred, args, word))
+                current = None
+                continue
+            if word.startswith('kill'):
+                # Alpha test: discards pixels and writes nothing we read.
                 current = None
                 continue
             base = word[:-4] if word.endswith('_sat') else word
@@ -328,7 +350,11 @@ class Machine:
             vf = int(args[2][2:])
             binding = next((b for b in self.draw.d['vb'] if b['fc'] == 95 - vf), None)
             words = self.draw.buffer_words(binding) if binding else None
-            self.fetch = (words, np.floor(index + 0.5).astype(np.int64), int(opts.get('Stride', 0)))
+            # The hardware truncates a float index unless the instruction asks
+            # for rounding (impostors fetch at i * 0.25 + 0.125).
+            if opts.get('RoundIndex', 'false') == 'true':
+                index = np.floor(index + 0.5)
+            self.fetch = (words, np.floor(index).astype(np.int64), int(opts.get('Stride', 0)))
         words, vertex, stride = self.fetch
         if words is None:
             return
@@ -382,6 +408,7 @@ class Machine:
         for reg, value in (registers or {}).items():
             self.r[reg] = value
         active = np.ones(self.n, bool)
+        held = active
         waiting = {}  # label -> vertices that jumped to it
         for ins in program.instructions:
             kind = ins[0]
@@ -393,6 +420,16 @@ class Machine:
                 jumping = self.rows(active, ins[1])
                 waiting[ins[2]] = waiting.get(ins[2], np.zeros(self.n, bool)) | jumping
                 active = active & ~jumping
+                continue
+            if kind == 'cond':
+                bools = self.draw.reg(0x4900 + ins[2] // 32)
+                value = bool((bools >> (ins[2] % 32)) & 1)
+                held = active
+                if value == ins[1]:  # cexec b skips when b is false (!b: when true)
+                    active = np.zeros(self.n, bool)
+                continue
+            if kind == 'endcond':
+                active = held
                 continue
             if kind == 'cjmp':
                 bools = self.draw.reg(0x4900 + ins[2] // 32)
