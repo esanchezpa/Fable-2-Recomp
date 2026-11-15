@@ -31,6 +31,7 @@
 - Añadido diagnóstico del último arranque fallido: el log llega al attract del título, pero no registra input/foco; el canal remoto Debug no estaba presente en los clones Release. Auditoría de solo lectura de hashes/logs del reemplazo de iconos sin reproducir el defecto ni cambiar fuentes/arte.
 
 ### Added
+- Added six static contract checks for console file ingestion, lazy Lua-pump startup, ready/done sequencing, output routing, and the distinct 20 s startup-drop and 30 s reply-timeout paths. Guarded tests pass; this does not establish which path occurred in a prior runtime attempt.
 - Documentada la auditoría estática de tres commits ReXGlue (memexport CPU, límite de presents y sync GPU) y ejecutado bajo guard el test nativo de `PresentRateLimiter`; la correspondencia F-03/F-04/F-05 queda marcada provisional porque falta la lista maestra.
 - Añadida herramienta read-only para inspeccionar atlas/sidecar KBPM v2 con detiling A2/Xenos y comparación byte a byte con bancos GOTY Spain, cubierta por siete pruebas sintéticas.
 - Incluido `thirdparty/rexglue-sdk/out` en el presupuesto de almacenamiento administrado y añadida una prueba de regresión; las builds del SDK ya no quedan fuera del límite del guard.
