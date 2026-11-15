@@ -357,6 +357,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   o.xyz = float3(wear_mask, stretch / 32.0, wear);
 #elif DEBUG_VIEW == 2
   o.xyz = 1.0;  // which surfaces this shader draws
+#elif DEBUG_VIEW == 6
+  // R the character flag (xe_flags bit 31); dark blue where this shader draws.
+  o.xyz = (xe_flags & 0x80000000u) ? float3(1.0, 0.0, 0.0) : float3(0.0, 0.0, 0.25);
 #elif DEBUG_VIEW == 3
   // R/G the albedo uv wrapped 16x (stripes show tiling), B texels per pixel / 8.
   o.xyz = float3(frac(r8.y * 16.0), frac(r8.x * 16.0), saturate(max(duv.x, duv.y) / 8.0));
