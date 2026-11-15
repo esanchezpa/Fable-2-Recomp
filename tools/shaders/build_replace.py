@@ -51,6 +51,7 @@ SHADERS = [
 # the game's own).
 SPARROW_ONLY = [
     ('shadowbuf.ps.hlsl', 'ps_5_1', [], '0F99810F072BF0FC'),        # screen-space sun shadow buffer
+    ('path.ps.hlsl', 'ps_5_1', [], '578342593A37DD35'),             # town cobbles / paths, 4 lights
 ]
 
 

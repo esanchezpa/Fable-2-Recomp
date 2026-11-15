@@ -31,6 +31,21 @@ float SparrowMap(int2 p) {
   return xe_textures_2d[SPARROW_SUN_INDEX].Load(int4(p, 0, 0)).x;
 }
 
+// Whether the SDK handed over a map this frame (sparrow_renderer on, map
+// drawn): the Sparrow-only lighting additions follow it, so with the cvar
+// off the ports render exactly as the game's own shaders.
+// sparrow_debug (SDK cvar): 0 off, 1 no sun where the map covers, 2 only
+// the light the Sparrow materials add.
+int SparrowDebug() {
+  uint rows = SparrowSunRows();
+  return rows >= 2u ? int(SparrowMap(int2(12, int(rows) - 1)) + 0.5) : 0;
+}
+
+bool SparrowActive() {
+  uint rows = SparrowSunRows();
+  return rows >= 2u && SparrowMap(int2(6, int(rows) - 1)) > 0.5;
+}
+
 // Sun visibility at a world position (1 lit, 0 shadowed, 3x3 PCF), or -1
 // when the map is off or the point lies outside it: the caller then keeps
 // the game's own shadow. n is the surface normal (for the normal offset);
@@ -88,7 +103,7 @@ float SparrowSunShadow(float3 pos, float3 n) {
       sum += lerp(top, bottom, f.y);
     }
   }
-  if (SparrowMap(int2(12, frame_row)) > 0.5) return 0.0;
+  if (abs(SparrowMap(int2(12, frame_row)) - 1.0) < 0.5) return 0.0;
   return sum / 9.0;
 }
 
@@ -103,6 +118,51 @@ float SparrowSunOr(float game_shadow, float3 pos, float3 n) {
 // No surface normal: leaves, bark, ferns.
 float SparrowSunOrVolume(float game_shadow, float3 pos) {
   return SparrowSunOr(game_shadow, pos, float3(0.0, 0.0, 0.0));
+}
+
+// --- Physically based lighting ----------------------------------------------
+// The game lights with Lambert diffuse in its own units (albedo * light, no
+// 1/pi), so a specular lobe in the same units is pi * BRDF_spec. GGX normal
+// distribution, Smith height-correlated visibility, Schlick Fresnel.
+#ifndef SPARROW_F0
+#define SPARROW_F0 0.04        // dielectric: stone, earth, wood, plaster
+#endif
+
+float SparrowFresnel(float f0, float vdh) {
+  float k = 1.0 - saturate(vdh);
+  float k2 = k * k;
+  return f0 + (1.0 - f0) * k2 * k2 * k;
+}
+
+// Specular light for one light of colour `light` (already attenuated and
+// shadowed) arriving along l: pi * D * V * F * N.L.
+float3 SparrowSpecular(float3 n, float3 v, float3 l, float roughness, float f0, float3 light) {
+  float ndl = saturate(dot(n, l));
+  float ndv = max(dot(n, v), 1e-4);
+  if (ndl <= 0.0) return 0.0;
+  float3 h = normalize(l + v);
+  float ndh = saturate(dot(n, h));
+  float a = max(roughness * roughness, 0.002);
+  float a2 = a * a;
+  float d = ndh * ndh * (a2 - 1.0) + 1.0;
+  float D = a2 / (3.14159265 * d * d);
+  float gv = ndl * sqrt(ndv * ndv * (1.0 - a2) + a2);
+  float gl = ndv * sqrt(ndl * ndl * (1.0 - a2) + a2);
+  float V = 0.5 / max(gv + gl, 1e-5);
+  float F = SparrowFresnel(f0, dot(v, h));
+  return light * (3.14159265 * D * V * F * ndl);
+}
+
+// Sky reflection weight for the ambient light: Fresnel at the view angle,
+// damped by roughness (rough surfaces scatter it into the diffuse they
+// already have). Multiply by the ambient/sky light.
+float SparrowEnvSpecular(float3 n, float3 v, float roughness, float f0) {
+  float ndv = saturate(dot(n, v));
+  float k = 1.0 - ndv;
+  float k2 = k * k;
+  float f = f0 + (max(1.0 - roughness, f0) - f0) * k2 * k2 * k;
+  float smooth = 1.0 - roughness;
+  return f * smooth * smooth;
 }
 
 #endif
