@@ -293,6 +293,12 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float3 v = r6.y * C87.xyz; r12.y = C87.y * r6.w; r5.xyz = v; }       // 50
   r2.xyz = r6.x * r14.xyz + C22.xyz;                                     // 51
   r2.xyz = r13.xyz * r2.xyz + C20.xyz;                                   // 52
+  float sky_vis = 1.0;
+#if SPARROW
+  // Sparrow: sky openness and the sun's bounce on the ambient (r9 holds the
+  // normal as zyx; c87 is the sun's colour in this one-light shader).
+  if (SparrowActive()) r2.xyz = SparrowAmbient(r2.xyz, input.v2.xyz, r9.zyx, C87.xyz, sky_vis);
+#endif
   { float3 v = r8.ywz * r5.xzy; r12.z = C87.z * r6.w; r5.xyz = v; }      // 53
   r12.xyz *= skin_tint;
   r6.xyz = r12.xyz * r11.zyx + r5.xzy;                                   // 54
@@ -359,6 +365,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   o.xyz = dbg_shadow;     // screen-space shadow buffer (tf8)
 #elif DEBUG_VIEW == 10
   o.xyz = float3(dbg_fog, saturate(r0.z / 4000.0), 0.0);  // R fog amount, G distance
+#endif
+#if SPARROW
+  if (SparrowDebug() == 3) o.xyz = float3(sky_vis, 1.0 - sky_vis, 0.0) * 0.5;  // red open, green closed
 #endif
   AlphaTest(o.w);
   coverage = AlphaToMask(o.w, input.position.xy);

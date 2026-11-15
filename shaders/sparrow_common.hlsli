@@ -178,4 +178,150 @@ float SparrowEnvSpecular(float3 n, float3 v, float roughness, float f0) {
   return f * smooth * smooth;
 }
 
+
+// --- Sky light and bounce light ---------------------------------------------
+// The sun map is a height field of everything the sun sees, and each of its
+// texels is a sunlit surface point whose world position can be rebuilt.
+//   SparrowSkyVisibility: how much of the sky above a point is open (8
+//     directions x 3 distances, horizon angles from the rebuilt points).
+//   SparrowBounce: sunlight bounced off the nearby sunlit points (one
+//     bounce, Lambert, no occlusion between them), in the game's light
+//     units per unit sun colour: multiply by the sun's colour.
+#ifndef SPARROW_BOUNCE_ALBEDO
+#define SPARROW_BOUNCE_ALBEDO float3(0.42, 0.36, 0.28)  // earth, sandstone, plaster
+#endif
+#ifndef SPARROW_BOUNCE_RADIUS
+#define SPARROW_BOUNCE_RADIUS 6.0
+#endif
+
+struct SparrowFrameData {
+  float3 centre, l, right, up;
+  float radius, depth_half, size;
+  bool valid;
+};
+
+SparrowFrameData SparrowFrame() {
+  SparrowFrameData f = (SparrowFrameData)0;
+  uint rows = SparrowSunRows();
+  if (rows < 2u) return f;
+  int fr = int(rows) - 1;
+  f.valid = SparrowMap(int2(6, fr)) > 0.5;
+  f.centre = float3(SparrowMap(int2(0, fr)), SparrowMap(int2(1, fr)), SparrowMap(int2(2, fr)));
+  float sr = SparrowMap(int2(3, fr));
+  f.radius = abs(sr);
+  f.depth_half = SparrowMap(int2(4, fr));
+  f.size = SparrowMap(int2(5, fr));
+  f.l = float3(SparrowMap(int2(8, fr)), SparrowMap(int2(9, fr)), SparrowMap(int2(10, fr)));
+  float3 ref = abs(f.l.x) < 0.9 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
+  f.right = normalize(cross(ref, f.l));
+  f.up = cross(f.l, f.right);
+  if (sr < 0.0) f.up = -f.up;
+  f.valid = f.valid && f.radius > 0.0 && f.depth_half > 0.0 && f.size >= 1.0;
+  return f;
+}
+
+// The sunlit surface point the map holds at the map-plane position of
+// `pos` + `offset` (world units along right / up); false where nothing is
+// drawn or outside the map.
+bool SparrowSunlitPoint(SparrowFrameData f, float3 pos, float2 offset, out float3 hit) {
+  float3 v = pos - f.centre;
+  float x = dot(f.right, v) + offset.x, y = dot(f.up, v) + offset.y;
+  hit = 0.0;
+  float2 m = float2(x, y) / f.radius;
+  if (max(abs(m.x), abs(m.y)) >= 1.0) return false;
+  // Bilinear over the four texels (ones with nothing drawn left out), so
+  // heights vary smoothly between texels.
+  float2 uv = float2(m.x * 0.5 + 0.5, 0.5 - m.y * 0.5) * f.size - 0.5;
+  int2 b = int2(floor(uv));
+  float2 fr = uv - float2(b);
+  int2 hi = int2(int(f.size) - 1, int(f.size) - 1);
+  float d00 = SparrowMap(clamp(b, 0, hi)), d10 = SparrowMap(clamp(b + int2(1, 0), 0, hi));
+  float d01 = SparrowMap(clamp(b + int2(0, 1), 0, hi)), d11 = SparrowMap(clamp(b + int2(1, 1), 0, hi));
+  float4 w4 = float4((1.0 - fr.x) * (1.0 - fr.y), fr.x * (1.0 - fr.y), (1.0 - fr.x) * fr.y, fr.x * fr.y);
+  w4 *= float4(d00 > 0.0, d10 > 0.0, d01 > 0.0, d11 > 0.0);
+  float wsum = dot(w4, 1.0);
+  if (wsum <= 1e-4) return false;
+  float d = dot(w4, float4(d00, d10, d01, d11)) / wsum;
+  hit = f.centre + f.right * x + f.up * y + f.l * ((d - 0.5) * 2.0 * f.depth_half);
+  return true;
+}
+
+// 0 (closed in) .. 1 (open sky), cosine-weighted for the normal n; -1
+// where the map is off or does not cover the point.
+float SparrowSkyVisibility(float3 pos, float3 n) {
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return -1.0;
+  float3 v = pos - f.centre;
+  if (max(abs(dot(f.right, v)), abs(dot(f.up, v))) >= f.radius * 0.97) return -1.0;
+  // Search from half a metre out along the normal: from the face itself a
+  // wall finds its own top overhead and shades itself.
+  float3 origin = pos + n * 0.5;
+  const float radii[3] = {0.6, 1.8, 5.0};
+  // The nearest ring counts less: with eight directions a thin pole or a
+  // person would block a whole 45-degree slice.
+  const float ring_weight[3] = {0.5, 1.0, 1.0};
+  float open = 0.0, weight = 0.0;
+  [unroll] for (int k = 0; k < 8; ++k) {
+    float a = (float(k) + 0.5) * (6.2831853 / 8.0);
+    float2 dir = float2(cos(a), sin(a));
+    float sin_h = 0.0;  // highest horizon in this direction
+    float3 hdir = normalize(f.right * dir.x + f.up * dir.y);
+    [unroll] for (int j = 0; j < 3; ++j) {
+      float3 hit;
+      if (SparrowSunlitPoint(f, origin, dir * radii[j], hit)) {
+        float3 w = hit - origin;
+        float len = length(w);
+        if (len > 0.05) sin_h = max(sin_h, ring_weight[j] * w.z / len);
+      }
+    }
+    // The open part of this slice above the horizon, weighted by how much
+    // that part of the sky faces the surface (a vertical wall sees half).
+    float facing = saturate(0.5 + 0.5 * dot(n, normalize(float3(hdir.xy, 0.0) + float3(0.0, 0.0, 1e-3))));
+    float w8 = lerp(1.0, facing, saturate(1.0 - n.z));
+    open += (1.0 - sin_h * sin_h) * w8;
+    weight += w8;
+  }
+  return weight > 0.0 ? open / weight : -1.0;
+}
+
+// Bounce light per unit sun colour, in the game's light units.
+float3 SparrowBounce(float3 pos, float3 n) {
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return 0.0;
+  const int N = 16;
+  float area = 3.14159265 * SPARROW_BOUNCE_RADIUS * SPARROW_BOUNCE_RADIUS / float(N);
+  float sum = 0.0;
+  [unroll] for (int k = 0; k < N; ++k) {
+    // Spiral over the disc (golden angle), denser near the point.
+    float r = SPARROW_BOUNCE_RADIUS * sqrt((float(k) + 0.5) / float(N));
+    float a = float(k) * 2.3999632;
+    float3 hit;
+    if (!SparrowSunlitPoint(f, pos, float2(cos(a), sin(a)) * r, hit)) continue;
+    float3 w = hit - pos;
+    float d2 = max(dot(w, w), 0.25);
+    w *= rsqrt(d2);
+    float cos_r = saturate(dot(n, w));
+    float cos_p = saturate(dot(-w, f.l) + 0.3);  // patch roughly faces the sun
+    sum += cos_r * cos_p / d2;
+  }
+  return SPARROW_BOUNCE_ALBEDO * (sum * area / 3.14159265);
+}
+
+#ifndef SPARROW_SKY
+#define SPARROW_SKY 1.0      // how much the sky's openness shapes the ambient
+#endif
+#ifndef SPARROW_BOUNCE
+#define SPARROW_BOUNCE 1.0
+#endif
+
+// The material's ambient light (game units, before albedo) shaped by the
+// open sky and given the sun's bounce. vis_out: the sky visibility (for
+// sparrow_debug 3), 1 where not covered.
+float3 SparrowAmbient(float3 ambient, float3 pos, float3 n, float3 sun, out float vis_out) {
+  float vis = SparrowSkyVisibility(pos, n);
+  vis_out = vis < 0.0 ? 1.0 : vis;
+  if (vis < 0.0) return ambient;
+  return ambient * lerp(1.0, vis, SPARROW_SKY) + SparrowBounce(pos, n) * sun * SPARROW_BOUNCE;
+}
+
 #endif
