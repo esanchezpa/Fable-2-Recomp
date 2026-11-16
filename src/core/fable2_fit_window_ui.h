@@ -954,6 +954,16 @@ inline void NoteBink(int entry) {
 namespace fable2::fitwindow::ui {
 // Call once a frame (the console poll does). Switches letterboxing on while a
 // video plays and back off after, if the fit is on.
+//
+// NOTE (Round 19, QA evidence analysis-visual-flicker-fix.json): a timer-based
+// hold ("grace") after the last Bink call was tried here and proven
+// ineffective - the visible flash sits in the ~0.5 s right before the next
+// clip's BinkOpen (game preload timing), which no silence-based timeout can
+// cover, and it is not yet proven that the letterbox state (rather than the
+// clip content itself) is the visible artifact. The attempted grace change
+// was reverted; a context-based OFF (menu / UI-screen detection) is proposed
+// and awaits approval. Do not reintroduce a timed hold without addressing
+// that analysis first.
 inline void TickVideo() {
   static bool playing = false;
   const int64_t last = detail::g_bink_last_ms.load(std::memory_order_relaxed);
