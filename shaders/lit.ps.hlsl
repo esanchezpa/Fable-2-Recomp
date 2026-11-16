@@ -304,6 +304,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
 #endif
   { float3 v = r8.ywz * r5.xzy; r12.z = C87.z * r6.w; r5.xyz = v; }      // 53
   float3 sparrow_spec = 0.0;
+  float3 dbg_spec = r8.yzw;  // DEBUG_VIEW 11
 #if SPARROW
   if (SparrowActive() && !(xe_flags & 0x80000000u)) {
     // Scenery only (characters keep the game's sheen and the skin terms):
@@ -321,13 +322,19 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     r5.xyz = 0.0;
     if (!XeBool(134))
       sparrow_spec += r2.xyz * C27.w * SparrowEnvSpecular(n, v, rough, max(spec_lum, SPARROW_F0)) * SPARROW_SKY_REFLECT;
+  } else if (SparrowActive()) {
+    // Characters: the soft universal lobe and fabric sheen (their specular
+    // maps are near zero), off the skin, which keeps its own terms.
+    float3 n = r9.zyx, v = r10.xyz;
+    sparrow_spec = (SparrowCharacterSpecular(n, v, C80.xyz, C87.xyz * dbg_shadow) +
+                    SparrowCharacterSheen(r2.xyz * C27.w, n, v)) * (1.0 - skin);
   }
 #endif
   r12.xyz *= skin_tint;
   r6.xyz = r12.xyz * r11.zyx + r5.xzy;                                   // 54
   r6.xyz += sparrow_spec;
 #if SPARROW
-  if (SparrowDebug() == 2 && SparrowActive() && !(xe_flags & 0x80000000u)) {
+  if (SparrowDebug() == 2 && SparrowActive()) {
     r6.xyz = sparrow_spec;
     r7.xyz = 0.0;
   }
@@ -393,6 +400,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   o.xyz = r8.yzw;         // albedo
 #elif DEBUG_VIEW == 9
   o.xyz = dbg_shadow;     // screen-space shadow buffer (tf8)
+#elif DEBUG_VIEW == 11
+  // The specular map (x4) on characters; dark blue elsewhere.
+  o.xyz = (xe_flags & 0x80000000u) ? dbg_spec * 4.0 : float3(0.0, 0.0, 0.25);
 #elif DEBUG_VIEW == 10
   o.xyz = float3(dbg_fog, saturate(r0.z / 4000.0), 0.0);  // R fog amount, G distance
 #endif

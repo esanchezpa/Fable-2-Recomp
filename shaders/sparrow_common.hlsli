@@ -398,6 +398,30 @@ float3 SparrowGroundSheen(float3 ambient, float3 n, float3 v) {
   return ambient * SparrowEnvSpecular(n, v, SPARROW_GROUND_ROUGHNESS, SPARROW_F0) * SPARROW_GROUND_SHEEN;
 }
 
+// --- Character highlights ----------------------------------------------------
+// The game draws characters nearly matte: their specular maps are close to
+// zero on hair, clothes and skin, so the map cannot tell cloth, leather and
+// metal apart. Every character surface gets the same soft dielectric lobe
+// (a rough GGX at 4%: matte leather / cloth) per light, plus a faint sky
+// sheen at grazing angles, the fabric's rim. light: the light's colour,
+// attenuated and shadowed but without N.L; ambient: the ambient light in game
+// units (times c27.w), before the albedo.
+#ifndef SPARROW_CHAR_ROUGH
+#define SPARROW_CHAR_ROUGH 0.6
+#endif
+#ifndef SPARROW_CHAR_SPEC
+#define SPARROW_CHAR_SPEC 1.0
+#endif
+#ifndef SPARROW_CHAR_SHEEN
+#define SPARROW_CHAR_SHEEN 0.5
+#endif
+float3 SparrowCharacterSpecular(float3 n, float3 v, float3 l, float3 light) {
+  return SparrowSpecular(n, v, l, SPARROW_CHAR_ROUGH, SPARROW_F0, light) * SPARROW_CHAR_SPEC;
+}
+float3 SparrowCharacterSheen(float3 ambient, float3 n, float3 v) {
+  return ambient * SparrowEnvSpecular(n, v, SPARROW_CHAR_ROUGH, SPARROW_F0) * SPARROW_CHAR_SHEEN;
+}
+
 // sparrow_debug 3: sky visibility as red (open) .. green (closed in), blue
 // where Sparrow does not cover the point (vis < 0) and the game's ambient
 // stays. Through the tonemap, read vis as R / (R + G).

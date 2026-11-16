@@ -230,6 +230,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   if (SparrowActive())
     r5.xyz = SparrowAmbient(r5.xyz, input.v2.xyz, r7.wzy, C87.xyz * C112.x + C88.xyz * C112.y, sky_vis);
 #endif
+  float3 char_ambient = r5.xyz;  // Sparrow: the ambient light, before the albedo
   r5.xyz = r11.xyz * r5.xyz;                                             // 156
   { float3 v = r5.xyz * C27.w; r0.z = sqrt(abs(r0.w)); ps = r0.z; r5.xyz = v; }  // 157
   if (XeBool(135)) {
@@ -263,6 +264,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float v = C254.x - r6.x; r6.x = rsqrt(abs(r6.w)); ps = r6.x; r2.z = v; }  // 183
   { float3 v = r9.xyz * r6.x; r6.x = rsqrt(abs(r0.w)); ps = r6.x; r13.xyz = v; }  // 184
   { float3 v = r2.xyw * r6.x; r6.w = sqrt(abs(r6.w)); ps = r6.w; r9.yzw = v; }  // 185
+  float3 char_l0 = r9.yzw, char_l1 = r13.xyz;  // Sparrow: toward the lights (world)
   r12.xy = saturate(-r6.yw * C96.xy + C254.x);                           // 186
   r6.x = dot(r9.wyz, C98.zxy);                                           // 187
   r12.z = dot(r7.ywz, r9.wyz);                                           // 188
@@ -279,10 +281,12 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r12.xy = r6.yx * C94.yx + C254.x;                                      // 199
   { float2 v = r9.yz * r9.yz; ps = r12.x; r6.xy = v; }                   // 200
   { float2 v = r6.xy * r6.xy; r6.w = ps * r2.z; ps = r6.w; r6.xy = v; }  // 201
+  float char_light1 = r6.w;  // Sparrow: light 1 range * cone * shadow, without N.L
   { float v = r6.w * r2.y; r9.y = saturate(C23.w * r2.y); ps = r9.y; r6.w = v; }  // 202
   { float2 v = r9.xy * r6.xy; r12.w = C254.x - r6.z; ps = r12.w; r9.xy = v; }  // 203
   { float v = r9.x * r12.w; r13.x = C88.x * r6.w; ps = r13.x; r12.z = v; }  // 204
   { float2 v = r12.yz * r12.wy; r13.y = C88.y * r6.w; ps = r13.y; r9.zw = v; }  // 205
+  float char_light0 = r9.z;  // Sparrow: light 0 range * cone * shadow, without N.L
   { float2 v = r9.yz * r2.zx; r13.z = C88.z * r6.w; ps = r13.z; r6.xy = v; }  // 206
   r2.xyz = r6.y * C87.xyz + r13.xyz;                                     // 207
   r6.x = r6.x * r12.x;                                                   // 208
@@ -290,6 +294,17 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r6.xyz = r9.w * C87.xyz + r6.xyz;                                      // 210
   r6.xyz = r8.xyz * r6.xyz + r5.xyz;                                     // 211
   r2.xyz = r11.xyz * r2.xyz + r6.xyz;                                    // 212
+#if SPARROW
+  if (SparrowActive() && (xe_flags & 0x80000000u)) {
+    // Characters: the soft universal lobe per light and the fabric sheen
+    // (sparrow_common.hlsli; their specular maps are near zero).
+    float3 n = r7.wzy, v = r10.xyz;
+    float3 char_add = SparrowCharacterSpecular(n, v, char_l0, C87.xyz * char_light0) +
+              SparrowCharacterSpecular(n, v, char_l1, C88.xyz * char_light1) +
+              SparrowCharacterSheen(char_ambient * C27.w, n, v);
+    r2.xyz = SparrowDebug() == 2 ? char_add : r2.xyz + char_add;  // 2: only what Sparrow adds
+  }
+#endif
   if (XeBool(133)) {
     r6.xyz = TF13(r0.xy).xyz;                                            // 213
     r6.xyz = r6.xyz * r6.xyz;                                            // 214

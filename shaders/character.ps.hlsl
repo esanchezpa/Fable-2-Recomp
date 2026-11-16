@@ -25,6 +25,9 @@
 // Xenos reading notes are in xe_common.hlsli.
 
 // --- SDK translator interface (shaders/xe_common.hlsli) -------------------
+#ifndef DEBUG_VIEW
+#define DEBUG_VIEW 0  // 7: the specular map (x4), for tuning highlights
+#endif
 #define XE_FLOAT_CONSTANTS 44
 #define XE_DESCRIPTOR_INDICES 8
 #include "xe_common.hlsli"
@@ -243,6 +246,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   if (SparrowActive())
     r6.xyz = SparrowAmbient(r6.xyz, input.v2.xyz, r10.zyx, C87.xyz, sky_vis);
 #endif
+  float3 char_ambient = r6.xyz;  // Sparrow: the ambient light, before the albedo
   r6.xyz = r7.yzw * r6.xyz;                                              // 153
   { float3 v = r6.xyz * C27.w; r0.z = sqrt(abs(r0.z)); ps = r0.z; r5.xyz = v; }  // 154
   if (XeBool(135)) {
@@ -287,11 +291,22 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float v = r0.w * r6.x; r6.y = -C255.x + r6.y; r6.x = v; }            // 190
   r6.y = r6.y * C94.x + C255.x;                                          // 191
   r2.xy = r6.xy * r6.w;                                                  // 192
+  float char_light = r2.y;  // Sparrow: range * cone * shadow, without N.L
   r6.xy = r2.yx * r6.zy;                                                 // 193
   r2.xyz = r6.x * C87.xyz;                                               // 194
   r6.xyz = r6.y * C87.xyz;                                               // 195
   r6.xyz = r8.xyz * r6.xyz + r5.xyz;                                     // 196
   r2.xyz = r7.yzw * r2.xyz + r6.xyz;                                     // 197
+#if SPARROW
+  if (SparrowActive() && (xe_flags & 0x80000000u)) {
+    // Characters: the soft universal lobe per light and the fabric sheen
+    // (sparrow_common.hlsli; their specular maps are near zero).
+    float3 n = r10.zyx, v = r9.xyz;
+    float3 char_add = SparrowCharacterSpecular(n, v, r11.xyz, C87.xyz * char_light) +
+              SparrowCharacterSheen(char_ambient * C27.w, n, v);
+    r2.xyz = SparrowDebug() == 2 ? char_add : r2.xyz + char_add;  // 2: only what Sparrow adds
+  }
+#endif
   if (XeBool(133)) {
     r6.xyz = TF13(r0.xy).xyz;                                            // 198
     r6.xyz = r6.xyz * r6.xyz;                                            // 199
@@ -328,6 +343,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   }
   r0.xyz = C20.w * C26.xyz;                                              // 226
   float4 o = float4(r0.xyz * r6.yzw, C26.w * r7.x);                      // 227
+#if DEBUG_VIEW == 7
+  o.xyz = r8.xyz * 4.0;
+#endif
 #if SPARROW
   if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);  // red open, green closed
 #endif

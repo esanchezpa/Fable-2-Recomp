@@ -246,6 +246,15 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     sparrow_grazing += base * max(r8.yzw, SPARROW_F0);
     r5.xyz = 0.0;
     sparrow_grazing += ambient * C27.w * SparrowEnvSpecular(n, v, rough, max(spec_lum, SPARROW_F0)) * SPARROW_SKY_REFLECT;
+    if (xe_flags & 0x80000000u) {
+      // Characters: the soft universal lobe and fabric sheen instead, as
+      // lit.ps.hlsl / lit_shadow.ps.hlsl (their specular maps are near zero).
+      sparrow_grazing = SparrowCharacterSpecular(n, v, l0, C87.xyz * (light_mask.x * light_atten.w)) +
+                        SparrowCharacterSpecular(n, v, l1, C88.xyz * (light_mask.y * light_atten.z)) +
+                        SparrowCharacterSpecular(n, v, l2, C89.xyz * (light_mask.z * light_atten.y)) +
+                        SparrowCharacterSpecular(n, v, l3, C90.xyz * (light_mask.w * light_atten.x)) +
+                        SparrowCharacterSheen(ambient * C27.w, n, v);
+    }
     if (SparrowDebug() == 2) { r11.xyz = 0.0; r6.yzw = 0.0; }
   }
 #endif

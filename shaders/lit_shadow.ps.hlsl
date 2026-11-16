@@ -303,6 +303,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r6.xyz = r6.x * C88.xyz;                                               // 102
   r6.xyz = r7.w * C87.xyz + r6.xyz;                                      // 103
   float3 sparrow_spec = 0.0;
+  float3 dbg_spec = r11.xyz;  // DEBUG_VIEW 7
 #if SPARROW
   if (SparrowActive() && !(xe_flags & 0x80000000u)) {
     // GGX for both lights with the game's specular map as F0 (floored at
@@ -320,6 +321,14 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     if (!XeBool(134))
       sparrow_spec += ambient * C27.w * SparrowEnvSpecular(n, v, rough, max(spec_lum, SPARROW_F0)) * SPARROW_SKY_REFLECT;
     if (SparrowDebug() == 2) { r5.xyz = 0.0; r2.xyz = 0.0; }
+  } else if (SparrowActive()) {
+    // Characters: the soft universal lobe for both lights and the fabric
+    // sheen (their specular maps are near zero).
+    float3 n = r9.zyx, v = r10.xyz;
+    sparrow_spec = SparrowCharacterSpecular(n, v, l0, C87.xyz * light0) +
+                   SparrowCharacterSpecular(n, v, l1, C88.xyz * light1) +
+                   SparrowCharacterSheen(ambient * C27.w, n, v);
+    if (SparrowDebug() == 2) { r5.xyz = 0.0; r2.xyz = 0.0; r6.xyz = 0.0; }
   }
 #endif
   r6.xyz = r11.xyz * r6.xyz + r5.xyz;                                    // 104
@@ -366,6 +375,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   o.xyz = float3(wear_mask, stretch / 32.0, wear);
 #elif DEBUG_VIEW == 2
   o.xyz = 1.0;  // which surfaces this shader draws
+#elif DEBUG_VIEW == 7
+  // The specular map (x4) on characters; dark blue elsewhere.
+  o.xyz = (xe_flags & 0x80000000u) ? dbg_spec * 4.0 : float3(0.0, 0.0, 0.25);
 #elif DEBUG_VIEW == 6
   // R the character flag (xe_flags bit 31); dark blue where this shader draws.
   o.xyz = (xe_flags & 0x80000000u) ? float3(1.0, 0.0, 0.0) : float3(0.0, 0.0, 0.25);
