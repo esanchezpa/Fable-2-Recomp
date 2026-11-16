@@ -231,6 +231,15 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   { float3 v = r12.xyz * C21.xyz; r6.x = r6.x * r6.x; r12.xyz = v; }     // 47
   r5.xyz = r6.x * r13.xyz + C22.xyz;                                     // 48
   r5.xyz = r12.xyz * r5.xyz + C20.xyz;                                   // 49
+  float sky_vis = -1.0;
+#if SPARROW
+  // Sparrow: sky openness and the sun's bounce on the ambient, as lit.ps.hlsl
+  // (characters too: the hero's body is drawn here in daylight). r9 holds
+  // the normal as zyx; c112 picks which of the two lights casts shadows.
+  if (SparrowActive())
+    r5.xyz = SparrowAmbient(r5.xyz, input.v2.xyz, r9.zyx, C87.xyz * C112.x + C88.xyz * C112.y,
+                            sky_vis);
+#endif
   float3 ambient = r5.xyz;  // Sparrow: the ambient light, before the albedo
   r5.xyz = r7.xyz * r5.xyz;                                              // 50
   if (XeBool(135)) {
@@ -363,6 +372,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
 #elif DEBUG_VIEW == 3
   // R/G the albedo uv wrapped 16x (stripes show tiling), B texels per pixel / 8.
   o.xyz = float3(frac(r8.y * 16.0), frac(r8.x * 16.0), saturate(max(duv.x, duv.y) / 8.0));
+#endif
+#if SPARROW
+  if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);  // red open, green closed
 #endif
   AlphaTest(o.w);
   coverage = AlphaToMask(o.w, input.position.xy);

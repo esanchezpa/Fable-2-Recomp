@@ -236,6 +236,13 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r6.x = r6.x * r6.x; ps = r6.x;                                         // 150
   r6.xyz = r6.x * r11.xyz + C22.xyz;                                     // 151
   r6.xyz = r5.xyz * r6.xyz + C20.xyz;                                    // 152
+  float sky_vis = -1.0;
+#if SPARROW
+  // Sparrow: sky openness and the sun's bounce on the ambient, as lit.ps.hlsl
+  // (r10.zyx is the world normal; the sun is the light c112 picks for shadows).
+  if (SparrowActive())
+    r6.xyz = SparrowAmbient(r6.xyz, input.v2.xyz, r10.zyx, C87.xyz, sky_vis);
+#endif
   r6.xyz = r7.yzw * r6.xyz;                                              // 153
   { float3 v = r6.xyz * C27.w; r0.z = sqrt(abs(r0.z)); ps = r0.z; r5.xyz = v; }  // 154
   if (XeBool(135)) {
@@ -321,6 +328,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   }
   r0.xyz = C20.w * C26.xyz;                                              // 226
   float4 o = float4(r0.xyz * r6.yzw, C26.w * r7.x);                      // 227
+#if SPARROW
+  if (SparrowDebug() == 3) o.xyz = SparrowVisDebug(sky_vis);  // red open, green closed
+#endif
   AlphaTest(o.w);
   coverage = AlphaToMask(o.w, input.position.xy);
   return o * xe_color_exp_bias.x;
