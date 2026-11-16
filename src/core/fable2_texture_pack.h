@@ -91,6 +91,14 @@ inline void SeedCvars(const std::filesystem::path& user_root) {
           .u8string();
   seed("shader_replace_dir",
        cfg.shader_rewrites ? std::string(shaders.begin(), shaders.end()) : std::string());
+  // Sparrow character materials (leather / metal / gloss by texture hash),
+  // read by the SDK and passed to the character shaders in the draw flags.
+  const std::u8string materials = (rex::filesystem::GetExecutableFolder() / "shaders" /
+                                   "sparrow_replace" / "character_materials.txt")
+                                      .u8string();
+  seed("character_materials", cfg.sparrow_renderer && cfg.shader_rewrites
+                                  ? std::string(materials.begin(), materials.end())
+                                  : std::string());
 }
 
 // Per-frame poll of the toggle key (game window focused). Flips the SDK cvar;

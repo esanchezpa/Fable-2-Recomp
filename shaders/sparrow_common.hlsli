@@ -401,11 +401,18 @@ float3 SparrowGroundSheen(float3 ambient, float3 n, float3 v) {
 // --- Character highlights ----------------------------------------------------
 // The game draws characters nearly matte: their specular maps are close to
 // zero on hair, clothes and skin, so the map cannot tell cloth, leather and
-// metal apart. Every character surface gets the same soft dielectric lobe
-// (a rough GGX at 4%: matte leather / cloth) per light, plus a faint sky
-// sheen at grazing angles, the fabric's rim. light: the light's colour,
-// attenuated and shadowed but without N.L; ambient: the ambient light in game
-// units (times c27.w), before the albedo.
+// metal apart. Instead the SDK tags each character draw with a material from
+// a table of albedo texture hashes (shaders/sparrow_replace/
+// character_materials.txt, xe_flags bits 29-30):
+//   0 cloth   (unlisted) a soft dielectric lobe and a faint grazing sky sheen,
+//                        the fabric's rim; the look the user approved first
+//   1 leather            a tighter, brighter dielectric lobe
+//   2 metal              a sharp lobe tinted by the albedo (F0 = albedo) and
+//                        a strong sky reflection; the diffuse stays, since the
+//                        game's albedo has the metal's shading painted in
+//   3 gloss              polished dielectric (lacquer, jewel, wet skin)
+// light: the light's colour, attenuated and shadowed but without N.L;
+// ambient: the ambient light in game units (times c27.w), before the albedo.
 #ifndef SPARROW_CHAR_ROUGH
 #define SPARROW_CHAR_ROUGH 0.6
 #endif
@@ -415,11 +422,66 @@ float3 SparrowGroundSheen(float3 ambient, float3 n, float3 v) {
 #ifndef SPARROW_CHAR_SHEEN
 #define SPARROW_CHAR_SHEEN 0.5
 #endif
-float3 SparrowCharacterSpecular(float3 n, float3 v, float3 l, float3 light) {
-  return SparrowSpecular(n, v, l, SPARROW_CHAR_ROUGH, SPARROW_F0, light) * SPARROW_CHAR_SPEC;
+#ifndef SPARROW_LEATHER_ROUGH
+#define SPARROW_LEATHER_ROUGH 0.42
+#endif
+#ifndef SPARROW_LEATHER_SPEC
+#define SPARROW_LEATHER_SPEC 1.3
+#endif
+#ifndef SPARROW_METAL_ROUGH
+#define SPARROW_METAL_ROUGH 0.32
+#endif
+#ifndef SPARROW_METAL_SPEC
+#define SPARROW_METAL_SPEC 1.0
+#endif
+#ifndef SPARROW_METAL_SHEEN
+#define SPARROW_METAL_SHEEN 1.5
+#endif
+#ifndef SPARROW_GLOSS_ROUGH
+#define SPARROW_GLOSS_ROUGH 0.22
+#endif
+struct SparrowCharMat {
+  float rough;
+  float f0;
+  float3 tint;   // colour of the highlight (white for dielectrics)
+  float spec;    // light lobe scale
+  float sheen;   // sky reflection scale
+};
+uint SparrowCharMaterialId() { return (xe_flags >> 29) & 3u; }
+// albedo: the colour map (TF0) in linear terms (squared).
+SparrowCharMat SparrowCharMaterial(float3 albedo) {
+  SparrowCharMat m;
+  m.rough = SPARROW_CHAR_ROUGH; m.f0 = SPARROW_F0; m.tint = 1.0;
+  m.spec = SPARROW_CHAR_SPEC; m.sheen = SPARROW_CHAR_SHEEN;
+  uint id = SparrowCharMaterialId();
+  if (id == 1u) {
+    m.rough = SPARROW_LEATHER_ROUGH; m.spec = SPARROW_LEATHER_SPEC;
+  } else if (id == 2u) {
+    float lum = max(dot(albedo, float3(0.2126, 0.7152, 0.0722)), 1e-3);
+    m.rough = SPARROW_METAL_ROUGH;
+    m.f0 = saturate(lum);
+    m.tint = saturate(albedo / lum);
+    m.spec = SPARROW_METAL_SPEC; m.sheen = SPARROW_METAL_SHEEN;
+  } else if (id == 3u) {
+    m.rough = SPARROW_GLOSS_ROUGH; m.f0 = 0.05;
+  }
+  return m;
 }
-float3 SparrowCharacterSheen(float3 ambient, float3 n, float3 v) {
-  return ambient * SparrowEnvSpecular(n, v, SPARROW_CHAR_ROUGH, SPARROW_F0) * SPARROW_CHAR_SHEEN;
+// sparrow_debug 4: a strong material colour on characters (none on cloth,
+// orange leather, cyan metal, magenta gloss), added through the sheen, which
+// every character shader adds exactly once.
+float3 SparrowCharMaterialDebug() {
+  if (SparrowDebug() != 4) return 0.0;
+  uint id = SparrowCharMaterialId();
+  return id == 1u ? float3(8.0, 3.0, 0.0) : id == 2u ? float3(0.0, 6.0, 8.0)
+       : id == 3u ? float3(8.0, 0.0, 8.0) : float3(0.0, 0.0, 0.0);
+}
+float3 SparrowCharacterSpecular(float3 n, float3 v, float3 l, float3 light, SparrowCharMat m) {
+  return SparrowSpecular(n, v, l, m.rough, m.f0, light) * (m.tint * m.spec);
+}
+float3 SparrowCharacterSheen(float3 ambient, float3 n, float3 v, SparrowCharMat m) {
+  return ambient * SparrowEnvSpecular(n, v, m.rough, m.f0) * (m.tint * m.sheen) +
+         SparrowCharMaterialDebug();
 }
 
 // sparrow_debug 3: sky visibility as red (open) .. green (closed in), blue

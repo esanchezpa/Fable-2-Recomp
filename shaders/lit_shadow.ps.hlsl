@@ -161,6 +161,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r9.xy = TF2(r8.wz).xy;                                                 // 17
   float2 albedo_uv = r8.yx;  // the uv before the fetch overwrites r8 (Modern: stretch)
   { float4 t = TF0(r8.yx); r8 = t.wxyz; }                                // 18
+  float3 sp_albedo = r8.yzw * r8.yzw;  // Sparrow: colour map, linear (character material)
   // Stretch: screen pixels per albedo texel, from the area of the uv
   // footprint of one pixel (the Jacobian, as mip selection uses). A face
   // mapped to a line of texels (the Wraithmarsh pillars keep v fixed and
@@ -325,9 +326,10 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     // Characters: the soft universal lobe for both lights and the fabric
     // sheen (their specular maps are near zero).
     float3 n = r9.zyx, v = r10.xyz;
-    sparrow_spec = SparrowCharacterSpecular(n, v, l0, C87.xyz * light0) +
-                   SparrowCharacterSpecular(n, v, l1, C88.xyz * light1) +
-                   SparrowCharacterSheen(ambient * C27.w, n, v);
+    SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+    sparrow_spec = SparrowCharacterSpecular(n, v, l0, C87.xyz * light0, cm) +
+                   SparrowCharacterSpecular(n, v, l1, C88.xyz * light1, cm) +
+                   SparrowCharacterSheen(ambient * C27.w, n, v, cm);
     if (SparrowDebug() == 2) { r5.xyz = 0.0; r2.xyz = 0.0; r6.xyz = 0.0; }
   }
 #endif

@@ -93,6 +93,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r8.zw = r0.yx * C10.yx + C10.wz;                                       // 16
   r10.zw = TF2(r8.wz).xy;                                                // 17
   { float4 t = TF0(r8.yx); r8 = t.wxyz; }                                // 18
+  float3 sp_albedo = r8.yzw * r8.yzw;  // Sparrow: colour map, linear (character material)
   r12 = TF1(r0.wz);                                                      // 19
   r2.w = dot(r1.xyz, r1.xyz);                                            // 20
   { float3 v = C19.zyx - r2.zyx; r0.z = C24.y - C24.x; r9.xyz = v; }     // 21
@@ -207,9 +208,10 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   if (SparrowActive() && (xe_flags & 0x80000000u)) {
     // The shared character lobe for both lights and the fabric sheen.
     float3 n = r8.wzy, v = r9.xyz;
-    float3 sparrow_add = SparrowCharacterSpecular(n, v, l0, C87.xyz * light0) +
-                         SparrowCharacterSpecular(n, v, l1, C88.xyz * light1) +
-                         SparrowCharacterSheen(ambient * C27.w, n, v);
+    SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+    float3 sparrow_add = SparrowCharacterSpecular(n, v, l0, C87.xyz * light0, cm) +
+                         SparrowCharacterSpecular(n, v, l1, C88.xyz * light1, cm) +
+                         SparrowCharacterSheen(ambient * C27.w, n, v, cm);
     r2.xyz = SparrowDebug() == 2 ? sparrow_add : r2.xyz + sparrow_add;
   }
 #endif

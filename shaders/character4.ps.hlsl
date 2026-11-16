@@ -151,6 +151,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r19.z = TF6(r13.yz, 2, -1).x;                                          // 77
   r19.w = TF6(r13.yz, 2, 0).x;                                           // 78
   { float4 t = TF0(r7.yx); r7 = t.wxyz; }                                // 79
+  float3 sp_albedo = r7.yzw * r7.yzw;  // Sparrow: colour map, linear (character material)
   r13.xyz = TF1(r9.wz).xyz;                                              // 80
   r15.xy = frac(r10.yz * TextureSize(7) - 0.5);                          // 81 (getWeights2D)
   r17.x = TF7(r10.yz, 0, -1).x;                                          // 82
@@ -326,11 +327,12 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     // Characters: the soft universal lobe per light and the fabric sheen
     // (sparrow_common.hlsli; their specular maps are near zero).
     float3 n = r8.zyx, v = r10.xyz;
-    float3 char_add = SparrowCharacterSpecular(n, v, char_l0, C87.xyz * char_light.x) +
-              SparrowCharacterSpecular(n, v, char_l1, C88.xyz * char_light.y) +
-              SparrowCharacterSpecular(n, v, char_l2, C89.xyz * char_light.z) +
-              SparrowCharacterSpecular(n, v, char_l3, C90.xyz * char_light.w) +
-              SparrowCharacterSheen(char_ambient * C27.w, n, v);
+    SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+    float3 char_add = SparrowCharacterSpecular(n, v, char_l0, C87.xyz * char_light.x, cm) +
+              SparrowCharacterSpecular(n, v, char_l1, C88.xyz * char_light.y, cm) +
+              SparrowCharacterSpecular(n, v, char_l2, C89.xyz * char_light.z, cm) +
+              SparrowCharacterSpecular(n, v, char_l3, C90.xyz * char_light.w, cm) +
+              SparrowCharacterSheen(char_ambient * C27.w, n, v, cm);
     r2.xyz = SparrowDebug() == 2 ? char_add : r2.xyz + char_add;  // 2: only what Sparrow adds
   }
 #endif

@@ -103,6 +103,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r8.zw = r0.yx * C10.yx + C10.wz;                                       // 18
   r10.xy = TF2(r8.wz).xy;                                                // 19
   { float4 t = TF0(r8.yx); r8 = t.wxyz; }                                // 20
+  float3 sp_albedo = r8.yzw * r8.yzw;  // Sparrow: colour map, linear (character material)
   r12.xyz = TF1(r0.wz).xyz;                                              // 21
   r1.w = dot(r1.zxy, r1.zxy);                                            // 22
   r9.xyz = -r2.zyx + C19.zyx;                                            // 23
@@ -249,11 +250,12 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     if (xe_flags & 0x80000000u) {
       // Characters: the soft universal lobe and fabric sheen instead, as
       // lit.ps.hlsl / lit_shadow.ps.hlsl (their specular maps are near zero).
-      sparrow_grazing = SparrowCharacterSpecular(n, v, l0, C87.xyz * (light_mask.x * light_atten.w)) +
-                        SparrowCharacterSpecular(n, v, l1, C88.xyz * (light_mask.y * light_atten.z)) +
-                        SparrowCharacterSpecular(n, v, l2, C89.xyz * (light_mask.z * light_atten.y)) +
-                        SparrowCharacterSpecular(n, v, l3, C90.xyz * (light_mask.w * light_atten.x)) +
-                        SparrowCharacterSheen(ambient * C27.w, n, v);
+      SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+      sparrow_grazing = SparrowCharacterSpecular(n, v, l0, C87.xyz * (light_mask.x * light_atten.w), cm) +
+                        SparrowCharacterSpecular(n, v, l1, C88.xyz * (light_mask.y * light_atten.z), cm) +
+                        SparrowCharacterSpecular(n, v, l2, C89.xyz * (light_mask.z * light_atten.y), cm) +
+                        SparrowCharacterSpecular(n, v, l3, C90.xyz * (light_mask.w * light_atten.x), cm) +
+                        SparrowCharacterSheen(ambient * C27.w, n, v, cm);
     }
     if (SparrowDebug() == 2) { r11.xyz = 0.0; r6.yzw = 0.0; }
   }

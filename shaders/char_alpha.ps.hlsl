@@ -72,6 +72,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r8.zw = r0.yx * C10.yx + C10.wz;                                       // 12
   r9.zw = TF2(r8.wz).xy;                                                 // 13
   { float4 t = TF0(r8.yx); r8 = t.wxyz; }                                // 14
+  float3 sp_albedo = r8.yzw * r8.yzw;  // Sparrow: colour map, linear (character material)
   { float4 t = TF1(r0.wz); r10 = t.xywz; }                               // 15
   r3.w = dot(r1.xyz, r1.xyz);                                            // 16
   { float3 v = C19.zyx - r2.zyx; r0.z = C24.y - C24.x; r2.yzw = v; }     // 17
@@ -131,8 +132,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   if (SparrowActive() && (xe_flags & 0x80000000u)) {
     // The shared character lobe and fabric sheen (lit.ps.hlsl).
     float3 n = r10.zyx, v = r2.xyz;
-    sparrow_add = SparrowCharacterSpecular(n, v, C80.xyz, C87.xyz * shadow) +
-                  SparrowCharacterSheen(ambient * C27.w, n, v);
+    SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+    sparrow_add = SparrowCharacterSpecular(n, v, C80.xyz, C87.xyz * shadow, cm) +
+                  SparrowCharacterSheen(ambient * C27.w, n, v, cm);
   }
 #endif
   r5.xyz = r7.xyz * r5.xyz + r6.xyz;                                     // 55

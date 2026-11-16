@@ -194,6 +194,7 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
   r12.xy = TF2(r8.wz).xy;                                                // 13
   float2 albedo_uv = r8.yx;  // the uv before the fetch overwrites r8 (Modern: stretch)
   { float4 t = TF0(r8.yx); r8 = t.wxyz; }                                // 14
+  float3 sp_albedo = r8.yzw * r8.yzw;  // Sparrow: colour map, linear (character material)
   float3 albedo = r8.yzw;  // kept for SkinWeight: r8.yzw is reused at 18-22
   // Stretch: screen pixels per albedo texel, from the area of the uv
   // footprint of one pixel (the Jacobian, as mip selection uses). A face
@@ -326,8 +327,9 @@ float4 main(PSInput7 input, out uint coverage : SV_Coverage) : SV_Target0 {
     // Characters: the soft universal lobe and fabric sheen (their specular
     // maps are near zero), off the skin, which keeps its own terms.
     float3 n = r9.zyx, v = r10.xyz;
-    sparrow_spec = (SparrowCharacterSpecular(n, v, C80.xyz, C87.xyz * dbg_shadow) +
-                    SparrowCharacterSheen(r2.xyz * C27.w, n, v)) * (1.0 - skin);
+    SparrowCharMat cm = SparrowCharMaterial(sp_albedo);
+    sparrow_spec = (SparrowCharacterSpecular(n, v, C80.xyz, C87.xyz * dbg_shadow, cm) +
+                    SparrowCharacterSheen(r2.xyz * C27.w, n, v, cm)) * (1.0 - skin);
   }
 #endif
   r12.xyz *= skin_tint;
