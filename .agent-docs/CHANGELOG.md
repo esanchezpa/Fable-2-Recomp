@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Round 18: intro/attract black flicker root-caused statically (Fase 4, bugs #13/#16 family): the fit-window feature's TickVideo (src/core/fable2_fit_window_ui.h:957-972) toggles present_letterbox OFF once no Bink call happened within 300 ms, while chained attract/cinematic clips have 0.7-0.9 s gaps (and some attract clips are 300-500 ms themselves) - full-window black flash at every clip boundary (patterns in fable_2_012.log and fable_2_025.log). Proposed opt-in fix: letterbox hold grace cvar fit_window_video_grace_ms (default 2000) applied only to the OFF transition; A/B plan and rollback (grace=0) in analysis-visual-flicker.json. Awaiting approval before implementing (runtime behavior change).
 
 ### Fable II QA watchpoint/hang investigation - Rounds 5-17 (2026-11-16)
 - Round 5: run F hang diagnosed offline (run 20261116T072047Z-29812-d0314e2e): not a debugger stop (5214 first-chances auto-passed, zero second-chance); deadlock verified from a full dump - UI thread blocked in Presenter::WaitForUITickFromUIThread, two guest render threads spinning in FrameLimiterWait_82242628 (SpinPause) reached via guest 1265; input dead with 60 fps. Evidence: analysis-hang-run-f.json, hang-state-f-full.dmp, hang-dump-stacks.log.
