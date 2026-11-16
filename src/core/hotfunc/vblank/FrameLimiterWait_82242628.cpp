@@ -46,6 +46,11 @@
 //   0x8224270C  call sub_82B9BEC8(r1+80), then the epilogue at 0x82242714.
 #include <windows.h>
 
+#include <chrono>
+
+#include <rex/cvar.h>
+#include <rex/logging.h>
+
 #include "fable_2_pch.h"
 
 extern "C" void FastHelper_821E8D20(PPCContext& ctx, uint8_t* base);
@@ -83,6 +88,16 @@ constexpr uint32_t kArgTimebase = 100;
 // PAUSE instructions between not-ready iterations of the wait loop.
 // (The guest loop has no delay; on hardware this is a tight spin.)
 constexpr int kPauseSpins = 32;
+
+// Watchdog (opt-in) state on the limit struct: the status byte whose bit1
+// gates EndFrame's counter publish (EndFrame_822981F0, see QA evidence
+// analysis-writer-found.json) and the publish gate word EndFrame reads.
+constexpr uint32_t kStatusByteOffset = 10941;
+constexpr uint32_t kPublishGateOffset = 21532;
+// Host wall-clock bound on the wait loop: a healthy wait is at most one
+// guest frame budget (~17 ms at 60 Hz); 250 ms is 15x that and far below
+// the input-dead hang duration.
+constexpr int kWatchdogTimeoutMs = 250;
 
 // Guest return addresses (the instruction after each bl).
 constexpr uint32_t kRetSaveGpr = 0x82242630;
@@ -172,7 +187,47 @@ void Epilogue(PPCContext& ctx, uint8_t* base) {
   __restgprlr_29(ctx, base);
 }
 
+// One log per watchdog episode: healthy waits reset this (see the main body),
+// so a stuck state logs exactly once at onset and further broken frames stay
+// silent instead of spamming.
+bool g_watchdog_logged_episode = false;
+
+// [hang-watchdog] onset log: pin the publish state the FASE 1 watchpoint was
+// meant to capture (status byte bit1, publish gate, published counter,
+// deadline) at the moment the spin is broken.
+void LogWatchdogExpiry(PPCContext& ctx, uint8_t* base, long long elapsed_ms) {
+  if (g_watchdog_logged_episode) {
+    return;
+  }
+  g_watchdog_logged_episode = true;
+  const uint32_t status_byte = REX_LOAD_U8(ctx.r31.u32 + kStatusByteOffset);
+  const uint32_t gate = REX_LOAD_U32(ctx.r31.u32 + kPublishGateOffset);
+  const uint32_t counter_ptr = REX_LOAD_U32(ctx.r31.u32 + kCounterPtrOffset);
+  const uint32_t published = REX_LOAD_U32(counter_ptr);
+  const uint32_t deadline = REX_LOAD_U32(ctx.r31.u32 + kDeadlineOffset);
+  REXSYS_WARN("[hang-watchdog] frame-limiter spin exceeded {} ms (elapsed {} ms): "
+              "status=0x{:02x} gate=0x{:08x} counter_ptr=0x{:08x} published=0x{:08x} "
+              "deadline=0x{:08x} - breaking the wait so EndFrame can publish",
+              kWatchdogTimeoutMs, elapsed_ms, status_byte, gate, counter_ptr,
+              published, deadline);
+}
+
 }  // namespace
+
+// Watchdog for the input-dead hang (QA evidence analysis-writer-found.json,
+// CHANGELOG Rounds 13-15): when the guest wait loop spins past 250 ms, log the
+// limiter state once per episode and let the frame complete so EndFrame can
+// publish the progress counter again. The A/B (analysis-watchdog-ab.json)
+// captured two real onsets - status=0x54 with bit1 clear, counter 10 behind -
+// both recovered, so the watchdog ships DEFAULT ON; set it false to restore
+// the original spin-forever behavior (rollback).
+REXCVAR_DEFINE_BOOL(hang_watchdog, true, "Diagnostics",
+                    "Bound the guest frame-limiter wait to 250 ms; on expiry "
+                    "log [hang-watchdog] state once per episode and complete "
+                    "the frame so EndFrame can publish the counter again "
+                    "(mitigation for the input-dead hang). Validated A/B with "
+                    "two recovered onsets; set false to roll back. "
+                    "Default: true.");
 
 extern "C" void FrameLimiterWait_82242628(PPCContext& __restrict ctx, uint8_t* base) {
   REX_FUNC_PROLOGUE();
@@ -205,6 +260,9 @@ extern "C" void FrameLimiterWait_82242628(PPCContext& __restrict ctx, uint8_t* b
   // sub_82B9BEC8. The loop leaves on GpuProgressCheck == 0 (beq 0x8224270C)
   // or once the counter reaches the deadline (blt cr6,0x822426E0 not taken).
   BuildArgBlock(ctx, base);
+  const bool watchdog_on = REXCVAR_GET(hang_watchdog);
+  const auto wait_start = std::chrono::steady_clock::now();
+  bool expired = false;
   while (ctx.cr6.lt != 0) {
     ctx.r3.s64 = ctx.r1.s64 + kArgBlock;
     ctx.lr = kRetProgressCheck;
@@ -215,8 +273,23 @@ extern "C" void FrameLimiterWait_82242628(PPCContext& __restrict ctx, uint8_t* b
     }
     ReadinessR9R11(ctx, base);
     if (ctx.cr6.lt != 0) {
+      if (watchdog_on) {
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - wait_start)
+                .count();
+        if (elapsed >= kWatchdogTimeoutMs) {
+          LogWatchdogExpiry(ctx, base, static_cast<long long>(elapsed));
+          expired = true;
+          break;
+        }
+      }
       SpinPause();
     }
+  }
+  if (!expired) {
+    // Healthy wait (or watchdog off): re-arm the one-shot onset log.
+    g_watchdog_logged_episode = false;
   }
 
   ctx.r3.s64 = ctx.r1.s64 + kArgBlock;
