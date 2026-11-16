@@ -901,7 +901,7 @@
                                Tag="30 fps · 720p · as on Xbox" Checked="EditionChecked" />
                   <Rectangle Width="1" Fill="{DynamicResource GoldLineSoft}" />
                   <RadioButton x:Name="EditionEnhanced" Style="{StaticResource EditionChoice}" Content="Enhanced"
-                               Tag="60 fps · remade textures and models" Checked="EditionChecked" />
+                               Tag="60 fps · sharper textures, detailed models" Checked="EditionChecked" />
                 </StackPanel>
               </Border>
               <TextBlock x:Name="CustomMarker" Text="Custom changes" FontSize="13.5" Foreground="{StaticResource Ember}"
@@ -1125,7 +1125,7 @@
                     </StackPanel>
                   </Border>
 
-                  <TextBlock Text="REMADE MODELS" Style="{StaticResource PageSection}" />
+                  <TextBlock Text="DETAILED MODELS" Style="{StaticResource PageSection}" />
                   <Border Padding="14,12" CornerRadius="6" Background="{DynamicResource WellPage}" BorderBrush="{DynamicResource PageLine}"
                           BorderThickness="1">
                     <StackPanel>
@@ -1133,7 +1133,7 @@
                         <CheckBox x:Name="RemadeModelsCheck" DockPanel.Dock="Right" Style="{StaticResource Switch}"
                                   Checked="RemadeModelsChanged" Unchecked="RemadeModelsChanged" />
                         <StackPanel VerticalAlignment="Center">
-                          <TextBlock Text="Use remade models" Style="{StaticResource PageText}" />
+                          <TextBlock Text="Use detailed models" Style="{StaticResource PageText}" />
                           <TextBlock Text="Enhanced only. Takes effect the next time you play" Style="{StaticResource PageHint}" />
                         </StackPanel>
                       </DockPanel>

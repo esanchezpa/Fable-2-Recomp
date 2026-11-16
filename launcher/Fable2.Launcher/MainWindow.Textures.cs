@@ -44,7 +44,7 @@ public partial class MainWindow
                 : "Not installed.";
             TexturesHintText.Text = _texturesChecked
                 ? "No texture pack has been published yet."
-                : "Upscaled, hand-tuned textures for the whole game, drawn with a key from your own game files. "
+                : "Sharper, more detailed textures for the whole game, drawn with a key from your own game files. "
                   + "Around 6 GB; downloads in parts and can be paused.";
             TexturesDownloadButton.Content = installedSomething ? "Check for updates" : "Download";
             return;
@@ -69,7 +69,7 @@ public partial class MainWindow
         else
         {
             TexturesStatusText.Text = $"Version {manifest.Version}: {size} in {manifest.Parts.Count} parts.";
-            TexturesHintText.Text = "Upscaled, hand-tuned textures for the whole game, drawn with a key from your own game files. "
+            TexturesHintText.Text = "Sharper, more detailed textures for the whole game, drawn with a key from your own game files. "
                                     + "Shows at a render scale of 2× or more; skip it on a weaker PC.";
             TexturesDownloadButton.Content = "Download";
         }

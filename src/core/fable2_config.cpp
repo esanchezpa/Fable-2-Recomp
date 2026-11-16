@@ -296,7 +296,7 @@ frame_limiter_sleep = true
 refresh_gpu_memory_each_frame = false
 
 [graphics]
-# Texture Pack: shows replacement textures (for example AI-upscaled ones) from
+# Texture Pack: shows replacement textures (for example the Modern textures) from
 # the textures\replace folder next to fable2_config.toml in place of the
 # originals. Switch between the pack ("Modern") and the original textures
 # ("Classic") while playing with texture_pack_toggle_key. A shared pack
@@ -312,8 +312,8 @@ texture_pack = true
 texture_pack_toggle_key = "F8"
 
 # Texture Dump: writes every game texture once, as it is first seen, to the
-# textures\dump folder as a DDS file. These are the input for the upscaling
-# tool. The first town is about 80 MB. Default: false
+# textures\dump folder as a DDS file. These are the input for the texture
+# pack tools. The first town is about 80 MB. Default: false
 texture_dump = false
 
 # Post-Processing: a colour grade in Modern graphics that adds depth without

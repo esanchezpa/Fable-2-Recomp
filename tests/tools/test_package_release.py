@@ -20,7 +20,8 @@ class PackageReleaseTests(unittest.TestCase):
         self.root, self.build = self.base / "repo", self.base / "build"
         self.launcher = self.base / "launcher/Fable2Launcher.exe"
         for path, text in {
-            self.root / "README.md": "readme",
+            self.root / "README.md": "developer readme",
+            self.root / "docs/PLAYER_README.md": "player readme",
             self.root / "config/fable2_config.toml": "repo config",
             self.root / "config/shader_prebuild.txt": "shader hashes",
             self.launcher: "launcher",
@@ -39,6 +40,7 @@ class PackageReleaseTests(unittest.TestCase):
             self.build / "data/art.pak": "game data",
             self.build / "data/scripts/quests/quest.lua": "game script",
             self.build / "data/scripts/recomp/F5.lua": "recomp script",
+            self.build / "shaders/replace/water.dxbc": "compiled shader",
         }.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
@@ -51,11 +53,14 @@ class PackageReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(release) as archive:
             names = set(archive.namelist())
             config = archive.read("Fable 2 1.6.0/fable2_config.toml").decode()
+            readme = archive.read("Fable 2 1.6.0/README.md").decode()
             build_info = json.loads(archive.read("Fable 2 1.6.0/fable2_build.json"))
         self.assertEqual(names, {f"Fable 2 1.6.0/{name}" for name in (
             "fable_2.exe", "rexruntime.dll", "rexgpu-xenos.dll", "fable2_build.json", "Fable2Launcher.exe",
-            "README.md", "fable2_config.toml", "shader_prebuild.txt", "data/scripts/recomp/F5.lua")})
+            "README.md", "fable2_config.toml", "shader_prebuild.txt", "shaders/replace/water.dxbc",
+            "data/scripts/recomp/F5.lua")})
         self.assertEqual(config, "repo config")
+        self.assertEqual(readme, "player readme")
         self.assertEqual(build_info, {"profiles": ["goty"], "version": "1.6.0"})
 
     def test_symbols_are_separate(self):
@@ -103,6 +108,7 @@ class VelopackPackagingTests(PackageReleaseTests):
         staged = packager.stage_velopack(self.root, self.build, self.launcher, stage, "1.8.0")
         self.assertEqual(set(staged), {"fable_2.exe", "rexruntime.dll", "rexgpu-xenos.dll", "fable2_build.json",
                                        "Fable2Launcher.exe", "README.md", "fable2_config.toml", "shader_prebuild.txt",
+                                       "shaders/replace/water.dxbc",
                                        "data/scripts/recomp/F5.lua"})
         self.assertEqual(json.loads((stage / "fable2_build.json").read_text())["version"], "1.8.0")
         self.assertFalse((stage / "default.xex").exists())

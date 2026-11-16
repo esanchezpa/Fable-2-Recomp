@@ -69,8 +69,8 @@ flow: [docs/TEXTURE_PACK_DOWNLOAD.md](../docs/TEXTURE_PACK_DOWNLOAD.md).
 | Edition | Sets |
 |---|---|
 | Original | 720p, 1× scale, game texture filtering, no FXAA, 30 fps, motion blur on, Modern graphics off |
-| Enhanced | 1440p, 2× scale, 16× filtering, FXAA, 60 fps, motion blur off, Modern graphics on (AI textures) |
-| Sparrow Edition | Enhanced, plus the remade models from the Sparrow model pack |
+| Enhanced | 1440p, 2× scale, 16× filtering, FXAA, 60 fps, motion blur off, Modern graphics on (Modern textures) |
+| Sparrow Edition | Enhanced, plus the detailed models from the Sparrow model pack |
 
 Sparrow Edition plays from `<data folder>\sparrow-game`: a folder of hard links
 to the player's game files, with the model pack's files (`<data folder>\sparrow-models`,

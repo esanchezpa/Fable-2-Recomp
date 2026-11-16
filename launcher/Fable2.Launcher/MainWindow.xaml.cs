@@ -493,7 +493,7 @@ public partial class MainWindow : Window
         string name = edition.Name + " edition";
         if (SaveAll())
             ShowToast(edition.Models && _home.Settings.RemadeModels && !Models.Available
-                ? $"{name} selected. The remade models aren't installed yet (Settings > Remade models), so the original models show for now."
+                ? $"{name} selected. The detailed models aren't installed yet (Settings > Detailed models), so the original models show for now."
                 : $"{name} selected.");
         UpdateCustomMarker();
     }
