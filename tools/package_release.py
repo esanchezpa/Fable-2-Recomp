@@ -41,7 +41,8 @@ def require(path):
 def release_files(root, build, launcher):
     files = {name: require(build / name) for name in BUILD_FILES}
     files["Fable2Launcher.exe"] = require(launcher)
-    files["README.md"] = require(root / "README.md")
+    # The player README, not the repo one (that is for developers).
+    files["README.md"] = require(root / "docs/PLAYER_README.md")
     # The launcher embeds these fonts; the OFL asks for its text to travel with them.
     for licence in sorted((root / "launcher/Fable2.Launcher/Fonts").glob("OFL-*.txt")):
         files[f"licenses/{licence.name}"] = licence

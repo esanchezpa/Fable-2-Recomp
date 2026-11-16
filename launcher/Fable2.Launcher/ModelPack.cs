@@ -79,7 +79,7 @@ public sealed class ModelPack
     {
         gameFolder = Path.GetFullPath(gameFolder);
         if (LauncherHome.IsInside(gameFolder, OverlayFolder) || LauncherHome.IsInside(OverlayFolder, gameFolder))
-            throw new InvalidOperationException("The game folder and the remade models folder overlap. Choose another game folder.");
+            throw new InvalidOperationException("The game folder and the detailed models folder overlap. Choose another game folder.");
 
         Dictionary<string, string> sources = new(StringComparer.OrdinalIgnoreCase);
         foreach (string file in Directory.EnumerateFiles(gameFolder, "*", SearchOption.AllDirectories))
@@ -106,8 +106,8 @@ public sealed class ModelPack
                 int error = Marshal.GetLastWin32Error();
                 Directory.Delete(OverlayFolder, recursive: true);
                 throw new InvalidOperationException(error == 17   // ERROR_NOT_SAME_DEVICE
-                    ? "The remade models need the game files, the model pack and the data folder on the same drive."
-                    : $"Could not set up the remade models: {new Win32Exception(error).Message}");
+                    ? "The detailed models need the game files, the model pack and the data folder on the same drive."
+                    : $"Could not set up the detailed models: {new Win32Exception(error).Message}");
             }
         }
         File.WriteAllText(stampPath, stamp);

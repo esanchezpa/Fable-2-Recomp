@@ -35,7 +35,7 @@ public partial class MainWindow
         ModelsRemoveButton.Visibility = downloaded || models.Installed && !models.Custom ? Visibility.Visible : Visibility.Collapsed;
         ModelsDownloadButton.Visibility = Visibility.Visible;
         ModelsDownloadButton.IsEnabled = true;
-        string about = "Remade, more detailed models for Enhanced, made from your own game files on this PC.";
+        string about = "More detailed characters, creatures and objects for Enhanced, built from your own game files on this PC.";
 
         if (models.Custom)
         {
@@ -48,7 +48,7 @@ public partial class MainWindow
         if (manifest is not null && complete && built)
         {
             ModelsStatusText.Text = $"Version {manifest.Version} installed. You're up to date.";
-            ModelsHintText.Text = "Shows when you play Enhanced with Use remade models on.";
+            ModelsHintText.Text = "Shows when you play Enhanced with Use detailed models on.";
             ModelsDownloadButton.Visibility = Visibility.Collapsed;
         }
         else if (manifest is not null && downloaded && !complete)
@@ -69,7 +69,7 @@ public partial class MainWindow
         else if (complete)
         {
             ModelsStatusText.Text = $"Version {pack.State.Version} installed.";
-            ModelsHintText.Text = "Shows when you play Enhanced with Use remade models on.";
+            ModelsHintText.Text = "Shows when you play Enhanced with Use detailed models on.";
             ModelsDownloadButton.Content = "Check for updates";
         }
         else if (manifest is not null)
@@ -152,11 +152,11 @@ public partial class MainWindow
             var steps = new Progress<(string Step, double Fraction)>(p =>
             {
                 ModelsBar.Value = p.Fraction;
-                ModelsStatusText.Text = "Building the remade models: " + p.Step.ToLowerInvariant() + "…";
+                ModelsStatusText.Text = "Building the detailed models: " + p.Step.ToLowerInvariant() + "…";
             });
             ModelsHintText.Text = "This takes a few minutes. Your game folder isn't changed.";
             SparrowModels.Result? result = await BuildModelsAsync(steps);
-            if (result is not null) done = $"Remade models installed ({result.Models} models). They show when you play Enhanced.";
+            if (result is not null) done = $"Detailed models installed ({result.Models} models). They show when you play Enhanced.";
         }
         catch (OperationCanceledException)
         {
@@ -189,7 +189,7 @@ public partial class MainWindow
         {
             Models.RemoveBuild();
             ModelDownloads.Remove();
-            ShowToast("Remade models removed. Enhanced shows the original models.");
+            ShowToast("Detailed models removed. Enhanced shows the original models.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -214,7 +214,7 @@ public partial class MainWindow
         long need = ModelPack.BuildBytes(game);
         long free = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(_home.DataFolder))!).AvailableFreeSpace;
         if (free < need)
-            throw new InvalidOperationException($"Building the remade models needs {TexturePack.FormatSize(need)} free on the data folder's drive "
+            throw new InvalidOperationException($"Building the detailed models needs {TexturePack.FormatSize(need)} free on the data folder's drive "
                                                 + $"({TexturePack.FormatSize(free)} free).");
         _buildCancel = new CancellationTokenSource();
         CancellationToken cancel = _buildCancel.Token;
@@ -234,7 +234,7 @@ public partial class MainWindow
     /// <summary>Play pressed with remade models that need building: build on the home page, then play.</summary>
     private async void BuildThenLaunch()
     {
-        SetState(LauncherState.Extracting, "Building the remade models", "Remaking the models for your game files…", "0%", "BUILDING");
+        SetState(LauncherState.Extracting, "Building the detailed models", "Building the models from your game files…", "0%", "BUILDING");
         ExtractBar.IsIndeterminate = false;
         ExtractBar.Value = 0;
         ExtractAnywayButton.Visibility = Visibility.Collapsed;
@@ -253,11 +253,11 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            ShowToast("Stopped. The remade models build again the next time you play.");
+            ShowToast("Stopped. The detailed models build again the next time you play.");
         }
         catch (Exception exception)
         {
-            MessageBox.Show(this, exception.Message, "Could not build the remade models", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, exception.Message, "Could not build the detailed models", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         RefreshGameState();
         RefreshModelsSection();

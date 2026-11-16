@@ -77,7 +77,7 @@ public static class SparrowModels
             for (int i = 0; i < levelBanks.Count; i++)
             {
                 cancel.ThrowIfCancellationRequested();
-                progress?.Report(("Remaking level models", 0.45 * i / levelBanks.Count));
+                progress?.Report(("Building level models", 0.45 * i / levelBanks.Count));
                 using Bank level = Bank.FromBytes(outer.Get(levelBanks[i]));
                 List<string> hits = level.Order.Where(wanted.ContainsKey).ToList();
                 if (hits.Count == 0) continue;
@@ -96,7 +96,7 @@ public static class SparrowModels
         Dictionary<string, Payload> opened = models.Where(pair => pair.Value is not null)
             .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.OrdinalIgnoreCase);
         if (opened.Count == 0)
-            throw new InvalidOperationException("None of the remade models open with your game files. The pack may be for a different version of Fable II.");
+            throw new InvalidOperationException("None of the detailed models open with your game files. The pack may be for a different version of Fable II.");
 
         // 2. Model headers.
         progress?.Report(("Updating model headers", 0.6));

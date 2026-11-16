@@ -5,7 +5,7 @@ namespace Fable2Launcher;
 /// patches (fable2_config.toml) and which game data to load. Settings the
 /// edition doesn't name are left as the player set them.
 /// </summary>
-/// <param name="ModernGraphics">[graphics] texture_pack: AI-upscaled textures, filtering and grade.</param>
+/// <param name="ModernGraphics">[graphics] texture_pack: Modern textures, filtering and grade.</param>
 /// <param name="Models">Load the remade model pack on top of the game files (when the Remade models switch is on).</param>
 /// <param name="Ultra">[graphics] ultra when the edition is picked: light shafts, a sharper sun shadow map redrawn
 /// every frame, stronger AO. Afterwards the Ultra lighting switch owns it.</param>
@@ -19,9 +19,9 @@ public sealed record Edition(
         "720p", "1", "-1", "none", "30",
         DisableMotionBlur: false, HighTickRate: false, HigherHfTickRate: false, ModernGraphics: false, Models: false);
 
-    // Enhanced is what Sparrow Edition was: AI textures, remade models and Ultra lighting, with F8 switching
+    // Enhanced is what Sparrow Edition was: Modern textures, detailed models and Ultra lighting, with F8 switching
     // between Classic and Modern graphics in game. Project Sparrow is now the new-renderer edition (not out yet).
-    public static readonly Edition Enhanced = new("enhanced", "Enhanced", "60 fps · 1440p · remade textures and models",
+    public static readonly Edition Enhanced = new("enhanced", "Enhanced", "60 fps · 1440p · sharper textures, detailed models",
         "1440p", "2", "5", "fxaa", "60",
         DisableMotionBlur: true, HighTickRate: false, HigherHfTickRate: false, ModernGraphics: true, Models: true,
         Ultra: true);
