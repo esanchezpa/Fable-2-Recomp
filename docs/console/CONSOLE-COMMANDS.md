@@ -263,6 +263,7 @@ Controls the fit-window module (`src/core/fable2_fit_window.h`), which renders a
 | `pad stick` | `pad stick <lx> <ly> [frames]` | Holds the left stick (-32768..32767, ly positive = forward). | |
 | `pad look` | `pad look <rx> <ry> [frames]` | Holds the right stick (turns the camera). | |
 | `pad off` | `pad off` | Releases everything now. | |
+| `pad p2` | `pad p2\|p3\|p4 <button\|stick\|look\|off> ...` | Same as `pad`, on a synthetic pad pinned to player 2-4 (guest users 1-3). For local co-op tests: run `cvar primary_slot_remap false` first, or the press makes that pad player 1. In a story save, `pad p2 Start` then `pad p2 A` joins player 2 as the henchman (the prologue blocks co-op: `lua AllowHenchman(true)`). | `glide` is player 1 only. |
 
 Example `console\autoexec.txt` that gets from boot to in-game with the last save (timings depend on the machine):
 

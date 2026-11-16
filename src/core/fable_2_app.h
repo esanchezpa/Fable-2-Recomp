@@ -160,6 +160,13 @@ class Fable2App : public rex::ReXApp {
       system->AddDriver(std::make_unique<fable2::remote::GamepadDriver>(
           system->window(), 0, &fable2::console::PadStore(),
           &fable2::console::PadEnabled(), rex::input::DeviceId{1ull << 62}));
+      // `pad p2|p3|p4 ...`: console pads pinned to guest users 1-3 (local
+      // co-op tests; later the network feeds remote players' input here).
+      for (int u = 1; u < 4; ++u)
+        system->AddDriver(std::make_unique<fable2::remote::GamepadDriver>(
+            system->window(), 0, &fable2::console::PadStoreN(u),
+            &fable2::console::PadEnabled(),
+            rex::input::DeviceId{(1ull << 62) + static_cast<uint64_t>(u)}, u));
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
       // (src/input/remote_control_server.h). OR-merges with the pads above; not
