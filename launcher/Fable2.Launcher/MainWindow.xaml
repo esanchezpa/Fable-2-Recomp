@@ -1356,10 +1356,21 @@
                       <TextBlock Style="{StaticResource PageHint}" FontSize="14.5"
                                  Text="This puts the following in one zip on your desktop. Nothing is uploaded; you attach it to the issue yourself." />
                       <TextBlock Style="{StaticResource PageHint}" FontSize="14.5" Margin="12,6,0,10"
-                                 Text="• The last 3 game logs&#x0a;• Version, channel and edition&#x0a;• Your settings files (no saves)&#x0a;• Graphics card, driver and Windows version" />
+                                 Text="• The last 3 game logs and the last 5 performance logs&#x0a;• Version, channel and edition&#x0a;• Your settings files (no saves)&#x0a;• Processor, memory, graphics card, driver and Windows version" />
                       <Button Style="{StaticResource PageButtonGreen}" Content="Create report" HorizontalAlignment="Left"
                               Click="CreateReportClicked" />
                     </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource Row}">
+                    <DockPanel>
+                      <CheckBox x:Name="PerfLogCheck" DockPanel.Dock="Right" Style="{StaticResource Switch}"
+                                Checked="SettingChanged" Unchecked="SettingChanged" />
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Record performance logs" Style="{StaticResource PageText}" />
+                        <TextBlock Text="Records frame rate, stutters and slow shader builds while you play. The logs stay on your PC until you send them with Report a problem. If you turn this off, the issues you run into can't be seen or fixed"
+                                   Style="{StaticResource PageHint}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </DockPanel>
                   </Border>
                   <Button x:Name="CheckFilesButton" Style="{StaticResource PageLink}" Click="CheckFilesClicked">
                     <StackPanel>

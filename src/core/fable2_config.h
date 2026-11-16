@@ -221,6 +221,9 @@ struct Values {
   // the GPU progress counter instead of spinning (see
   // FrameLimiterWait_82242628.cpp; needs the SDK's EVENT_WRITE_SHD wake).
   bool frame_limiter_sleep = true;
+  // [perf] performance_log: write logs/perf_<date>.log (fps per 10 s, slowest
+  // 1%, hitches); see src/diagnostics/perf_log.h.
+  bool performance_log = true;
   // [perf] refresh_gpu_memory_each_frame: false seeds the SDK cvar
   // clear_memory_page_state off (see the config file).
   bool refresh_gpu_memory_each_frame = false;

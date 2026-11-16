@@ -46,6 +46,9 @@ public class Fable2ConfigValues
     public bool Ultra { get; set; } = false;
 
     public int HotFuncYieldEvery { get; set; } = 1;  // 1 = original, 0 = never yield
+    // [perf] performance_log: Help > Record performance logs (frame rate log, plus the
+    // launcher turns on [pipeline-timing] in the game log).
+    public bool PerformanceLog { get; set; } = true;
 }
 
 /// <summary>One host-key -> guest-input binding (a "Key:Button" pair).</summary>
@@ -135,6 +138,7 @@ public static class Fable2ConfigFile
                     break;
                 case "perf":
                     if (key == "hotfunc_yield_every") values.HotFuncYieldEvery = ParseInt(rawValue, values.HotFuncYieldEvery);
+                    else if (key == "performance_log") values.PerformanceLog = ParseBool(rawValue, values.PerformanceLog);
                     break;
                 case "graphics":
                     if (key == "texture_pack") values.TexturePack = ParseBool(rawValue, values.TexturePack);
@@ -182,6 +186,7 @@ public static class Fable2ConfigFile
             ("patches", "realtime_texture_morphing", values.RealtimeTextureMorphing ? "true" : "false"),
             ("patches", "hero_dog_texture_readback", values.HeroDogTextureReadback ? "true" : "false"),
             ("perf", "hotfunc_yield_every", values.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture)),
+            ("perf", "performance_log", values.PerformanceLog ? "true" : "false"),
             ("graphics", "texture_pack", values.TexturePack ? "true" : "false"),
             ("graphics", "ultra", values.Ultra ? "true" : "false"),
         };

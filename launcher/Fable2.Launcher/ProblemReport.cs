@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using System.Text;
 
@@ -20,7 +21,10 @@ public static class ProblemReport
         string path = Path.Combine(outputFolder, $"ProjectSparrow-report-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
         using ZipArchive zip = ZipFile.Open(path, ZipArchiveMode.Create);
 
-        foreach (string log in Newest(home.LogsFolder, "*.log", 3))
+        foreach (string log in Newest(home.LogsFolder, "fable_2*.log", 3))
+            AddFile(zip, log, "logs/" + Path.GetFileName(log));
+        // Performance logs (logs/perf_*.log, [perf] performance_log): small, so a few sessions.
+        foreach (string log in Newest(home.LogsFolder, "perf_*.log", 5))
             AddFile(zip, log, "logs/" + Path.GetFileName(log));
         foreach (string config in new[] { home.GraphicsConfigPath, home.LauncherGraphicsPath, home.RecompConfigPath, home.SettingsPath })
             if (File.Exists(config)) AddFile(zip, config, "settings/" + Path.GetFileName(config));
@@ -46,7 +50,8 @@ public static class ProblemReport
         text.AppendLine($"Project Sparrow {version}");
         text.AppendLine($"Edition: {edition}");
         text.AppendLine($"Windows: {Environment.OSVersion.VersionString} ({(Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit")})");
-        text.AppendLine($"CPU threads: {Environment.ProcessorCount}");
+        text.AppendLine($"CPU: {ProcessorName()} ({Environment.ProcessorCount} threads)");
+        text.AppendLine($"Memory: {MemoryGb()}");
         // Display adapters, from the registry (no WMI dependency).
         try
         {
@@ -65,6 +70,37 @@ public static class ProblemReport
             text.AppendLine("GPU: could not be read");
         }
         return text.ToString();
+    }
+
+    private static string ProcessorName()
+    {
+        try
+        {
+            using RegistryKey? cpu = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            return (cpu?.GetValue("ProcessorNameString") as string)?.Trim() ?? "unknown";
+        }
+        catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return "unknown";
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatus
+    {
+        public uint Length, MemoryLoad;
+        public ulong TotalPhys, AvailPhys, TotalPageFile, AvailPageFile, TotalVirtual, AvailVirtual, AvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+
+    private static string MemoryGb()
+    {
+        var status = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
+        return GlobalMemoryStatusEx(ref status)
+            ? $"{status.TotalPhys / (1024.0 * 1024 * 1024):F1} GB"
+            : "unknown";
     }
 
     private static IEnumerable<string> Newest(string folder, string pattern, int count) =>

@@ -287,6 +287,14 @@ game_loop_sleep = true
 # Same frame pacing, less CPU heat. false = spin as before. Default: true
 frame_limiter_sleep = true
 
+# Performance Log: writes logs\perf_<date>-<time>.log while you play: the
+# frame rate every 10 seconds, the slowest 1% of frames, and every stall of
+# 100 ms or more. About 25 KB per hour; the 20 newest logs are kept. Help >
+# Report a problem in the launcher includes them. With it on, the launcher
+# also logs slow shader builds ([pipeline-timing]) in the game log.
+# false = no performance log. Default: true
+performance_log = true
+
 # Refresh GPU Memory Each Frame (SDK cvar clear_memory_page_state): at the end of
 # every frame the SDK forgets which guest memory it has already copied to the
 # GPU, so everything the next frame uses is copied again. It is a safety net for
@@ -575,6 +583,8 @@ bool Load(const std::filesystem::path& path) {
                                         values.game_loop_sleep);
     values.frame_limiter_sleep = Read<bool>(perf_table, "perf", "frame_limiter_sleep",
                                             "boolean", values.frame_limiter_sleep);
+    values.performance_log = Read<bool>(perf_table, "perf", "performance_log", "boolean",
+                                        values.performance_log);
     values.refresh_gpu_memory_each_frame = Read<bool>(
         perf_table, "perf", "refresh_gpu_memory_each_frame", "boolean",
         values.refresh_gpu_memory_each_frame);

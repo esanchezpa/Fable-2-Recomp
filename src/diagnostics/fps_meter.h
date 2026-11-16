@@ -24,6 +24,7 @@
 
 #include "fable2_func_trace.h"
 #include "fable2_f5_lua.h"  // F5 external-Lua run (polled per frame)
+#include "perf_log.h"  // always-on playtester performance log
 
 namespace fable2::functrace_window {
 
@@ -142,6 +143,8 @@ extern "C" void MainRenderLoop_82B9CD68(PPCContext& ctx, uint8_t* base) {
       }
     }
   }
+  // Playtester performance log ([perf] performance_log, on by default).
+  fable2::perflog::OnFrame(fable2::UserRoot());
   // F5 (host) -> run the external Lua file (per-frame, responsive).
   fable2::f5lua::poll_mainloop(ctx, base);
   fable2::console::poll(ctx, base);
