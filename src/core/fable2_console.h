@@ -1525,18 +1525,16 @@ inline void write_state_file() {
 
 // Lua commands run inside the game's own script update (console_pump.lua), not
 // from this hook: calling RunScript per command from MainRenderLoop raced the
-// game's Lua and corrupted the VM. RunScript is used once, to install the pump.
+// game's Lua and corrupted the VM. RunScript is used once, to install the pump,
+// and even that goes to the game thread (f5lua::request_run): this hook runs on
+// the render thread, and the one direct install still crashed now and then.
 inline void start_pump(PPCContext& ctx, uint8_t* base) {
+  (void)ctx;
+  (void)base;
   State& s = S();
   s.pump_requested = true;
   s.pump_req_time = Clock::now();
-  const PPCContext saved = ctx;
-  try {
-    const std::string path = "scripts/recomp/console_pump.lua";
-    f5lua::run_external(ctx, base, &path);
-  } catch (...) {
-  }
-  ctx = saved;
+  f5lua::request_run("scripts/recomp/console_pump.lua");
 }
 
 // Hands one line to the pump: console_run.lua = `return <seq>, [==[line]==]`.

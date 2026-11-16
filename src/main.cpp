@@ -24,6 +24,14 @@
 
 #include <rex/cvar.h>
 
+// Game-thread Lua tick, called from the idle point of ProcessGameFrame's
+// fixed-step loop (src/core/hotfunc/frame/ProcessGameFrame_82276C30.cpp). Runs
+// host-requested scripts (F5, console pump install) on the thread that owns
+// the game's Lua VM; see fable2_f5_lua.h "Threading".
+void fable2_game_thread_lua_tick(PPCContext& ctx, uint8_t* base) {
+  fable2::f5lua::run_pending(ctx, base);
+}
+
 // Host keyboard -> guest gamepad map (see src/input/keyboard_gamepad.h).
 // Format: "Key:Button,Key:Button,...".
 // The default layout is NOT baked in here: it lives in the config layer

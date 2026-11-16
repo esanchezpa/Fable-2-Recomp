@@ -119,6 +119,7 @@ extern "C" void RegisterFrameCallback_821DCF10(PPCContext& ctx, uint8_t* base);
 extern "C" void Release_RefCounted_821C67D8(PPCContext& ctx, uint8_t* base);
 extern "C" void ResolveSubsystemReference_821F8760(PPCContext& ctx, uint8_t* base);
 extern "C" void Yield_82CBD098(PPCContext& ctx, uint8_t* base);
+void fable2_game_thread_lua_tick(PPCContext& ctx, uint8_t* base);  // src/main.cpp
 extern "C" void __imp__RtlEnterCriticalSection(PPCContext& ctx, uint8_t* base);
 extern "C" void __imp__RtlLeaveCriticalSection(PPCContext& ctx, uint8_t* base);
 extern "C" void __restfpr_21(PPCContext& ctx, uint8_t* base);
@@ -1133,6 +1134,10 @@ extern "C" void ProcessGameFrame_82276C30(PPCContext& __restrict ctx, uint8_t* b
 	} else {
 	// --- (no work on this path) yield + re-check the frame threshold ---
 	SleepUntilNextStep(ctx);  // host-only: see above
+	// Host-only: run host-requested Lua (F5, console pump) here, between
+	// simulation steps on the thread that owns the game's Lua VM. Saves and
+	// restores ctx itself.
+	fable2_game_thread_lua_tick(ctx, base);
 	// bl 0x82cbd098
 	ctx.lr = 0x8227720C;
 	Yield_82CBD098(ctx, base);
