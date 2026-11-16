@@ -58,6 +58,8 @@ SPARROW_ONLY = [
     ('character.ps.hlsl', 'ps_5_1', [], '401A01FD4E5F8757'),        # characters: hair, cloth, robes
     ('character2.ps.hlsl', 'ps_5_1', [], '44B567635EB10620'),       # characters lit by two lights
     ('character4.ps.hlsl', 'ps_5_1', [], 'F2F103F16764043B'),       # characters lit by four lights
+    ('char_alpha.ps.hlsl', 'ps_5_1', [], '2FD24989AB04A475'),       # translucent character parts, sun
+    ('char_alpha2.ps.hlsl', 'ps_5_1', [], 'F96A4494958BFA12'),      # ... two lights + shadow map (wings)
 ]
 
 
