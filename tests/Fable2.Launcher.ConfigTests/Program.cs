@@ -360,6 +360,12 @@ try
     Require(!readBack.HigherHfTickRate, "higher_hf_tick_rate roundtrip failed");
     Require(readBack.HotFuncYieldEvery == 4, "hotfunc_yield_every roundtrip failed");
     Require(writtenAdv.Contains("[perf]"), "[perf] section was not written");
+Require(new Fable2ConfigValues().PerformanceLog && readBack.PerformanceLog, "performance logs should default to on");
+advanced.PerformanceLog = false;
+Fable2ConfigFile.Write(advPath, advanced);
+Require(File.ReadAllText(advPath).Contains("performance_log = false") && !Fable2ConfigFile.Read(advPath).PerformanceLog,
+"performance_log roundtrip failed");
+advanced.PerformanceLog = true;
     List<KeybindEntry> parsed = Fable2ConfigFile.ParseKeybinds(readBack.KeyboardGamepadMap);
     Require(parsed.Count == 4, "keybind parse count failed");
     Require(parsed[0].Key == "LMB" && parsed[0].Button == "X" && parsed[3].Key == "E" && parsed[3].Button == "A",

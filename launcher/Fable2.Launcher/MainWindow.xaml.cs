@@ -324,6 +324,7 @@ public partial class MainWindow : Window
             HigherHfTickCheck.IsChecked = _recomp.HigherHfTickRate;
             MorphingCheck.IsChecked = _recomp.RealtimeTextureMorphing;
             ReadbackCheck.IsChecked = _recomp.HeroDogTextureReadback;
+            PerfLogCheck.IsChecked = _recomp.PerformanceLog;
             YieldSlider.Value = Math.Clamp(_recomp.HotFuncYieldEvery, 0, 16);
             YieldValueText.Text = _recomp.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture);
             MouseLookCheck.IsChecked = _recomp.MouseLook;
@@ -376,6 +377,7 @@ public partial class MainWindow : Window
         _recomp.HigherHfTickRate = HigherHfTickCheck.IsChecked == true;
         _recomp.RealtimeTextureMorphing = MorphingCheck.IsChecked == true;
         _recomp.HeroDogTextureReadback = ReadbackCheck.IsChecked == true;
+        _recomp.PerformanceLog = PerfLogCheck.IsChecked == true;
         _recomp.HotFuncYieldEvery = (int)YieldSlider.Value;
         _recomp.MouseLook = MouseLookCheck.IsChecked == true;
         _recomp.DirectMouseLook = DirectMouseCheck.IsChecked == true;
@@ -575,6 +577,9 @@ public partial class MainWindow : Window
                 gameRoot = models.PrepareGameRoot(plan.GameRoot);
             startInfo.ArgumentList.Add("--game_data_root=" + gameRoot);
             startInfo.ArgumentList.Add("--user_root=" + _home.DataFolder);
+            // Performance logs: the game writes logs/perf_*.log itself ([perf] performance_log);
+            // this adds slow shader and pipeline builds to the game log.
+            if (_recomp.PerformanceLog) startInfo.ArgumentList.Add("--d3d12_log_pipeline_timing=true");
             Process.Start(startInfo);
             _gameLaunched = true;
             Close();
