@@ -582,9 +582,9 @@ public partial class MainWindow : Window
             if (_recomp.PerformanceLog) startInfo.ArgumentList.Add("--d3d12_log_pipeline_timing=true");
             // RenderDoc overlay crash (QA finding, PR #2 comment): the SDK loads
             // renderdoc.dll from PATH unconditionally and the 1.47 overlay kills
-            // the command-list thread (AV 0xC0000005). Strip RenderDoc entries
-            // from the child PATH unless the user opted in to live captures.
-            if (!_recomp.PerformanceLog)
+            // the command-list thread (AV 0xC0000005). Always strip RenderDoc
+            // entries from the child PATH; RenderDoc users should launch the exe
+            // outside the launcher for live captures.
             {
                 var rawPath = startInfo.EnvironmentVariables["PATH"] ?? Environment.GetEnvironmentVariable("PATH") ?? "";
                 var clean = string.Join(";", rawPath
