@@ -580,6 +580,18 @@ public partial class MainWindow : Window
             // Performance logs: the game writes logs/perf_*.log itself ([perf] performance_log);
             // this adds slow shader and pipeline builds to the game log.
             if (_recomp.PerformanceLog) startInfo.ArgumentList.Add("--d3d12_log_pipeline_timing=true");
+            // RenderDoc overlay crash (QA finding, PR #2 comment): the SDK loads
+            // renderdoc.dll from PATH unconditionally and the 1.47 overlay kills
+            // the command-list thread (AV 0xC0000005). Strip RenderDoc entries
+            // from the child PATH unless the user opted in to live captures.
+            if (!_recomp.PerformanceLog)
+            {
+                var rawPath = startInfo.EnvironmentVariables["PATH"] ?? Environment.GetEnvironmentVariable("PATH") ?? "";
+                var clean = string.Join(";", rawPath
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(p => p.IndexOf("RenderDoc", StringComparison.OrdinalIgnoreCase) < 0));
+                if (clean.Length > 0) startInfo.EnvironmentVariables["PATH"] = clean;
+            }
             Process.Start(startInfo);
             _gameLaunched = true;
             Close();
