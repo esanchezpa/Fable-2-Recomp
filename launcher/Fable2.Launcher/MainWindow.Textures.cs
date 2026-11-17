@@ -40,38 +40,37 @@ public partial class MainWindow
         if (manifest is null)
         {
             TexturesStatusText.Text = installedSomething
-                ? $"Version {state.Version} installed ({TexturePack.FormatSize(pack.InstalledBytes)}, {state.Parts.Count} parts)."
-                : "Not installed.";
+                ? string.Format(L10n.T("Version {0} installed ({1}, {2} parts)."), state.Version,
+                                TexturePack.FormatSize(pack.InstalledBytes), state.Parts.Count)
+                : L10n.T("Not installed.");
             TexturesHintText.Text = _texturesChecked
-                ? "No texture pack has been published yet."
-                : "Sharper, more detailed textures for the whole game, drawn with a key from your own game files. "
-                  + "Around 6 GB; downloads in parts and can be paused.";
-            TexturesDownloadButton.Content = installedSomething ? "Check for updates" : "Download";
+                ? L10n.T("No texture pack has been published yet.")
+                : L10n.T("Sharper, more detailed textures for the whole game, drawn with a key from your own game files. Around 6 GB; downloads in parts and can be paused.");
+            TexturesDownloadButton.Content = installedSomething ? L10n.T("Check for updates") : L10n.T("Download");
             return;
         }
 
         string size = TexturePack.FormatSize(manifest.TotalBytes);
         if (complete)
         {
-            TexturesStatusText.Text = $"Version {manifest.Version} installed ({size}). You're up to date.";
-            TexturesHintText.Text = "Shows at a render scale of 2× or more. F8 in game switches between Modern and Classic.";
+            TexturesStatusText.Text = string.Format(L10n.T("Version {0} installed ({1}). You're up to date."), manifest.Version, size);
+            TexturesHintText.Text = L10n.T("Shows at a render scale of 2× or more. F8 in game switches between Modern and Classic.");
             TexturesDownloadButton.Visibility = Visibility.Collapsed;
         }
         else if (installedSomething && missing is not null)
         {
             long remaining = missing.Sum(part => part.Size);
             TexturesStatusText.Text = state.Version == manifest.Version
-                ? $"Version {manifest.Version}: {missing.Count} of {manifest.Parts.Count} parts still to download ({TexturePack.FormatSize(remaining)})."
-                : $"Version {manifest.Version} is available: {missing.Count} parts changed ({TexturePack.FormatSize(remaining)}).";
-            TexturesHintText.Text = "Modern textures stay off until every part is in, so the game never shows a half pack.";
-            TexturesDownloadButton.Content = state.Version == manifest.Version ? "Resume" : "Update";
+                ? string.Format(L10n.T("Version {0}: {1} of {2} parts still to download ({3})."), manifest.Version, missing.Count, manifest.Parts.Count, TexturePack.FormatSize(remaining))
+                : string.Format(L10n.T("Version {0} is available: {1} parts changed ({2})."), manifest.Version, missing.Count, TexturePack.FormatSize(remaining));
+            TexturesHintText.Text = L10n.T("Modern textures stay off until every part is in, so the game never shows a half pack.");
+            TexturesDownloadButton.Content = state.Version == manifest.Version ? L10n.T("Resume") : L10n.T("Update");
         }
         else
         {
-            TexturesStatusText.Text = $"Version {manifest.Version}: {size} in {manifest.Parts.Count} parts.";
-            TexturesHintText.Text = "Sharper, more detailed textures for the whole game, drawn with a key from your own game files. "
-                                    + "Shows at a render scale of 2× or more; skip it on a weaker PC.";
-            TexturesDownloadButton.Content = "Download";
+            TexturesStatusText.Text = string.Format(L10n.T("Version {0}: {1} in {2} parts."), manifest.Version, size, manifest.Parts.Count);
+            TexturesHintText.Text = L10n.T("Sharper, more detailed textures for the whole game, drawn with a key from your own game files. Shows at a render scale of 2× or more; skip it on a weaker PC.");
+            TexturesDownloadButton.Content = L10n.T("Download");
         }
     }
 
@@ -99,7 +98,7 @@ public partial class MainWindow
         bool finished = false;
         try
         {
-            TexturesStatusText.Text = "Looking for the newest texture pack…";
+            TexturesStatusText.Text = L10n.T("Looking for the newest texture pack…");
             TexturePackManifest? manifest = _texturesManifest ?? await pack.FetchManifestAsync(cancel);
             _texturesChecked = true;
             _texturesManifest = manifest;
@@ -125,8 +124,8 @@ public partial class MainWindow
             TexturesDownloadButton.Visibility = Visibility.Collapsed;
             TexturesPauseButton.Visibility = Visibility.Visible;
             BuildPartRows(pack.MissingParts(manifest));
-            TexturesStatusText.Text = $"Downloading version {manifest.Version}…";
-            TexturesHintText.Text = "You can close the launcher or play in the meantime; the download resumes where it stopped.";
+            TexturesStatusText.Text = string.Format(L10n.T("Downloading version {0}…"), manifest.Version);
+            TexturesHintText.Text = L10n.T("You can close the launcher or play in the meantime; the download resumes where it stopped.");
 
             var progress = new Progress<PartProgress>(UpdatePartRow);
             await pack.DownloadAsync(manifest, progress, cancel);
@@ -134,7 +133,7 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            TexturesHintText.Text = "Paused. The download resumes where it stopped.";
+            TexturesHintText.Text = L10n.T("Paused. The download resumes where it stopped.");
         }
         catch (TexturePackException exception) { failure = exception.Message; }
         catch (Exception exception)
@@ -222,12 +221,12 @@ public partial class MainWindow
         row.Bar.Value = progress.Status is PartStatus.Installed ? progress.Size : progress.Done;
         row.Label.Text = progress.Status switch
         {
-            PartStatus.Downloading => $"{PartTitle(progress.Name)} · {TexturePack.FormatSize(progress.Done)} of {TexturePack.FormatSize(progress.Size)}",
-            PartStatus.Verifying => $"{PartTitle(progress.Name)} · checking",
-            PartStatus.Unpacking => $"{PartTitle(progress.Name)} · unpacking",
-            PartStatus.Installed => $"{PartTitle(progress.Name)} · installed",
-            PartStatus.Failed => $"{PartTitle(progress.Name)} · failed",
-            _ => $"{PartTitle(progress.Name)} · waiting"
+            PartStatus.Downloading => string.Format(L10n.T("{0} · {1} of {2}"), PartTitle(progress.Name), TexturePack.FormatSize(progress.Done), TexturePack.FormatSize(progress.Size)),
+            PartStatus.Verifying => string.Format(L10n.T("{0} · checking"), PartTitle(progress.Name)),
+            PartStatus.Unpacking => string.Format(L10n.T("{0} · unpacking"), PartTitle(progress.Name)),
+            PartStatus.Installed => string.Format(L10n.T("{0} · installed"), PartTitle(progress.Name)),
+            PartStatus.Failed => string.Format(L10n.T("{0} · failed"), PartTitle(progress.Name)),
+            _ => string.Format(L10n.T("{0} · waiting"), PartTitle(progress.Name))
         };
     }
 

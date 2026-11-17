@@ -34,14 +34,17 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _home = LauncherHome.ForCurrentUser();
+        L10n.Set(_home.Settings.Language);
+        LanguagePillText.Text = L10n.Current == "es" ? "ES" : "EN";
+        Loaded += (_, _) => L10n.Apply(this);
         _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); Toast.Visibility = Visibility.Collapsed; };
         PreviewKeyDown += WindowPreviewKeyDown;
         StateChanged += (_, _) => Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
 
         foreach (var option in Constants.GraphicsOptions.FrameLimits)
-            FrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = option.Label });
+            FrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = L10n.T(option.Label) });
         foreach (var option in Constants.GraphicsOptions.HostFrameLimits)
-            HostFrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = option.Label });
+            HostFrameLimitCombo.Items.Add(new ComboBoxItem { Tag = option.Value, Content = L10n.T(option.Label) });
 
         string? note = null;
         try
@@ -52,7 +55,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            note = "Could not prepare the data folder: " + exception.Message;
+            note = L10n.T("Could not prepare the data folder: ") + exception.Message;
         }
 
         _updater = new Updater(_home.Settings.Channel);
@@ -144,20 +147,20 @@ public partial class MainWindow : Window
     private void UpdateVersionText()
     {
         bool beta = _home.Settings.Channel == "beta";
-        VersionText.Text = $"{_version} · {(beta ? "Beta" : "Stable")}";
+        VersionText.Text = $"{L10n.T(_version)} · {(beta ? L10n.T("Beta") : L10n.T("Stable"))}";
         ChannelNote.Text = beta
-            ? "Newest fixes first, less tested. Back up your saves before switching back to Stable."
-            : "Tested releases. Updates download in the background; restart the launcher to install them.";
+            ? L10n.T("Newest fixes first, less tested. Back up your saves before switching back to Stable.")
+            : L10n.T("Tested releases. Updates download in the background; restart the launcher to install them.");
         UpdateActions.Visibility = _updater.IsInstalled ? Visibility.Visible : Visibility.Collapsed;
         CheckUpdatesButton.IsEnabled = !_checkingUpdates;
         RestartUpdateButton.Visibility = _updater.Pending is null ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatusText.Text =
-            !_updater.IsInstalled ? "Automatic updates start once Project Sparrow is installed with its installer. "
-                                    + (_version == "dev build" ? "This is a dev build." : $"You're running {_version}.")
-            : _updater.Pending is not null ? $"Version {_updater.Pending.Version} is ready. Restart to install it; your saves and settings stay as they are."
-            : _checkingUpdates ? "Checking for updates…"
+            !_updater.IsInstalled ? L10n.T("Automatic updates start once Project Sparrow is installed with its installer. ")
+                                    + (_version == "dev build" ? L10n.T("This is a dev build.") : string.Format(L10n.T("You're running {0}."), _version))
+            : _updater.Pending is not null ? string.Format(L10n.T("Version {0} is ready. Restart to install it; your saves and settings stay as they are."), _updater.Pending.Version)
+            : _checkingUpdates ? L10n.T("Checking for updates…")
             : _updateError is not null ? _updateError
-            : $"You're up to date ({_version}).";
+            : string.Format(L10n.T("You're up to date ({0})."), _version);
     }
 
     // ---------------------------------------------------------------- updates
@@ -175,7 +178,7 @@ public partial class MainWindow : Window
                 UpdateBar.Visibility = percent is > 0 and < 100 ? Visibility.Visible : Visibility.Collapsed;
                 UpdateBar.Value = percent;
             }));
-            if (!quiet) ShowToast(ready is not null ? $"Update {ready} is ready." : "You're up to date.");
+            if (!quiet) ShowToast(ready is not null ? string.Format(L10n.T("Update {0} is ready."), ready) : L10n.T("You're up to date."));
         }
         catch (UpdateSignatureException exception)
         {
@@ -184,7 +187,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             _updateError = "Couldn't check for updates. Check your internet connection and try again. (" + exception.Message + ")";
-            if (!quiet) ShowToast("Couldn't check for updates.");
+            if (!quiet) ShowToast(L10n.T("Couldn't check for updates."));
         }
         finally
         {
@@ -203,12 +206,12 @@ public partial class MainWindow : Window
     {
         if (Updater.IsGameRunning(_home.InstallFolder))
         {
-            ShowToast("Close Fable II first, then restart to update.");
+            ShowToast(L10n.T("Close Fable II first, then restart to update."));
             return;
         }
         if (_dirty) SaveAll(quiet: true);
         try { _updater.ApplyAndRestart(); }
-        catch (Exception exception) { ShowToast("Couldn't install the update: " + exception.Message); }
+        catch (Exception exception) { ShowToast(L10n.T("Couldn't install the update: ") + exception.Message); }
     }
 
     private void PlayWithoutUpdateClicked(object sender, RoutedEventArgs e) => LaunchGame();
@@ -241,11 +244,11 @@ public partial class MainWindow : Window
             GameCompatibility compatibility = GameCompatibilityInspector.Inspect(_home.GameFolder);
             GameLaunchPlanner.Create(ExecutableDirectory, _home.GameFolder, compatibility);
             if (_updater.Pending is not null)
-                SetState(LauncherState.UpdateReady, $"Update {_updater.Pending.Version} is ready",
+                SetState(LauncherState.UpdateReady, string.Format(L10n.T("Update {0} is ready"), _updater.Pending.Version),
                     "Restarting installs it and keeps your saves and settings. It takes a few seconds.", "Restart", "TO UPDATE");
             else
                 SetState(LauncherState.Ready, "Ready to play",
-                    compatibility.Label + ". Keyboard: WASD to move, E or Shift to interact, Esc to pause.", "Play", null);
+                    L10n.TLabel(compatibility.Label) + ". " + L10n.T("Keyboard: WASD to move, E or Shift to interact, Esc to pause."), "Play", null);
         }
         catch (Exception exception)
         {
@@ -253,8 +256,36 @@ public partial class MainWindow : Window
         }
     }
 
+    private void LanguageClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.ContextMenu is not ContextMenu menu) return;
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.IsChecked = (string)item.Tag == L10n.Current;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void LanguageChosen(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item || item.Tag is not string language || language == L10n.Current) return;
+        L10n.Set(language);
+        _home.Settings.Language = language;
+        _home.Save();
+        LanguagePillText.Text = language == "es" ? "ES" : "EN";
+        UpdateVersionText();
+        RefreshGameState();
+        RefreshModelsSection();
+        RefreshTexturesSection();
+        L10n.Apply(this);
+    }
+
     private void SetState(LauncherState state, string title, string text, string seal, string? sealSub, bool warn = false)
     {
+        title = L10n.T(title);
+        text = L10n.T(text);
+        seal = L10n.T(seal);
+        if (sealSub is not null) sealSub = L10n.T(sealSub);
         _state = state;
         StatusTitle.Text = title;
         StatusText.Text = text;
@@ -494,11 +525,11 @@ public partial class MainWindow : Window
         finally { _loading = false; }
         _home.Settings.Edition = edition.Id;
         if (!edition.ModernGraphics || !TexturesHalfInstalled) SetModernGraphics(edition.ModernGraphics);
-        string name = edition.Name + " edition";
+        string name = L10n.T(edition.Name + " edition");
         if (SaveAll())
             ShowToast(edition.Models && _home.Settings.RemadeModels && !Models.Available
-                ? $"{name} selected. The detailed models aren't installed yet (Settings > Detailed models), so the original models show for now."
-                : $"{name} selected.");
+                ? string.Format(L10n.T("{0} selected. The detailed models aren't installed yet (Settings > Detailed models), so the original models show for now."), name)
+                : string.Format(L10n.T("{0} selected."), name));
         UpdateCustomMarker();
     }
 
@@ -545,8 +576,8 @@ public partial class MainWindow : Window
         CheckForUpdates(quiet: true);
         UpdateVersionText();
         ShowToast(_home.Settings.Channel == "beta"
-            ? "Switched to Beta. Checking for beta updates…"
-            : "Switched to Stable.");
+            ? L10n.T("Switched to Beta. Checking for beta updates…")
+            : L10n.T("Switched to Stable."));
     }
 
     // ---------------------------------------------------------------- launch
@@ -685,11 +716,11 @@ public partial class MainWindow : Window
                 if (cancelled || error is not null) _home.Settings.GameFolder = previousGameFolder;
                 try { _home.Save(); } catch (IOException) { }
                 RefreshGameState();
-                if (cancelled) ShowToast("Stopped copying the disc.");
+                if (cancelled) ShowToast(L10n.T("Stopped copying the disc."));
                 else if (error is not null)
                     MessageBox.Show(this, error, "Could not read the disc image", MessageBoxButton.OK, MessageBoxImage.Error);
-                else ShowToast($"Copied {files:N0} files ({DiscExtraction.FormatSize(bytes)}) from {Path.GetFileName(isoPath)}. "
-                               + "Modern textures can be downloaded from Settings.");
+                else ShowToast(string.Format(L10n.T("Copied {0} files ({1}) from {2}. Modern textures can be downloaded from Settings."),
+                               files, DiscExtraction.FormatSize(bytes), Path.GetFileName(isoPath)));
             });
         });
     }
@@ -704,15 +735,17 @@ public partial class MainWindow : Window
         _lastPushedPercent = pct;
         ExtractBar.Value = pct;
         SealText.Text = $"{pct:0}%";
-        SealSubText.Text = "COPYING";
-        StatusTitle.Text = "Copying game files";
-        StatusText.Text = $"{DiscExtraction.FormatSize(progress.CompletedBytes + progress.CurrentFileWritten)} of "
-                          + $"{DiscExtraction.FormatSize(progress.TotalBytes)} · {progress.CurrentFile ?? progress.Phase}";
+        SealSubText.Text = L10n.T("COPYING");
+        StatusTitle.Text = L10n.T("Copying game files");
+        StatusText.Text = string.Format(L10n.T("{0} of {1}"),
+                            DiscExtraction.FormatSize(progress.CompletedBytes + progress.CurrentFileWritten),
+                            DiscExtraction.FormatSize(progress.TotalBytes))
+                          + " · " + L10n.T(progress.CurrentFile ?? progress.Phase);
     }
 
     private void ShowHashPrompt(string message)
     {
-        StatusTitle.Text = "This disc isn't a known Fable II GOTY copy";
+        StatusTitle.Text = L10n.T("This disc isn't a known Fable II GOTY copy");
         StatusText.Text = message + " It probably won't run. You can stop, or copy it anyway.";
         StatusDot.Fill = (Brush)FindResource("Ember");
         ExtractAnywayButton.Visibility = Visibility.Visible;
@@ -728,7 +761,7 @@ public partial class MainWindow : Window
     private void StopClicked(object sender, RoutedEventArgs e)
     {
         StopButton.IsEnabled = false;
-        StatusTitle.Text = "Stopping…";
+        StatusTitle.Text = L10n.T("Stopping…");
         if (_buildCancel is not null) _buildCancel.Cancel();
         else if (_hashDecision is not null) _hashDecision.TrySetResult(false);
         else _stopRequested = true;
@@ -832,11 +865,11 @@ public partial class MainWindow : Window
 
     private void FolderToggleClicked(object sender, RoutedEventArgs e)
     {
-        FolderPanelText.Text = $"Your saves, settings and logs live in {_home.DataFolder}. "
+        FolderPanelText.Text = string.Format(L10n.T("Your saves, settings and logs live in {0}. "), _home.DataFolder)
             + (LauncherHome.IsInside(_home.GameFolder, _home.DataFolder)
-                ? "The game files (about 7 GB) are in there too. "
-                : $"The game files are read from {_home.GameFolder}. ")
-            + "Updates never touch this folder.";
+                ? L10n.T("The game files (about 7 GB) are in there too. ")
+                : string.Format(L10n.T("The game files are read from {0}. "), _home.GameFolder))
+            + L10n.T("Updates never touch this folder.");
         Toggle(FolderPanel);
     }
 
@@ -850,7 +883,7 @@ public partial class MainWindow : Window
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             string zip = ProblemReport.Create(_home, _version, _home.Settings.Edition, desktop);
             OpenInShell(ProblemReport.IssueUrl(_version, _home.Settings.Edition));
-            ShowToast($"Saved {Path.GetFileName(zip)} to your desktop. Attach it to the GitHub issue that just opened.");
+            ShowToast(string.Format(L10n.T("Saved {0} to your desktop. Attach it to the GitHub issue that just opened."), Path.GetFileName(zip)));
         }
         catch (Exception exception)
         {
@@ -871,7 +904,7 @@ public partial class MainWindow : Window
         CheckBar.Value = 0;
         CheckCancelButton.Visibility = Visibility.Visible;
         CheckFilesButton.IsEnabled = false;
-        CheckStatusText.Text = "Checking game files…";
+        CheckStatusText.Text = L10n.T("Checking game files…");
         _checkCancel = new CancellationTokenSource();
         CancellationToken cancel = _checkCancel.Token;
         bool finished = false;   // late progress updates must not overwrite the result
@@ -907,7 +940,7 @@ public partial class MainWindow : Window
                 {
                     if (finished) return;
                     CheckBar.Value = percent;
-                    CheckStatusText.Text = $"Checking game files… {percent:F0}%";
+                    CheckStatusText.Text = string.Format(L10n.T("Checking game files… {0}"), percent) + "%";
                 });
             }, cancel), cancel);
             finished = true;
@@ -980,12 +1013,12 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         string target = dialog.FolderName;
         MoveDataButton.IsEnabled = false;
-        ShowToast("Moving your data. This can take a few minutes for the game files…");
+        ShowToast(L10n.T("Moving your data. This can take a few minutes for the game files…"));
         try
         {
             if (_dirty) SaveAll();
             await Task.Run(() => _home.MoveDataFolder(target));
-            ShowToast($"Moved. Your data now lives in {_home.DataFolder}.");
+            ShowToast(string.Format(L10n.T("Moved. Your data now lives in {0}."), _home.DataFolder));
         }
         catch (Exception exception)
         {
@@ -1006,14 +1039,14 @@ public partial class MainWindow : Window
         if (!File.Exists(Path.Combine(dialog.FolderName, "default.xex")) ||
             !Directory.Exists(Path.Combine(dialog.FolderName, "data")))
         {
-            ShowToast("That folder doesn't have default.xex and a data folder.");
+            ShowToast(L10n.T("That folder doesn't have default.xex and a data folder."));
             return;
         }
         _home.Settings.GameFolder = dialog.FolderName;
         try { _home.Save(); } catch (IOException) { }
         FolderPanel.Visibility = Visibility.Collapsed;
         RefreshGameState();
-        ShowToast($"Using the game files in {dialog.FolderName}.");
+        ShowToast(string.Format(L10n.T("Using the game files in {0}."), dialog.FolderName));
     }
 
     private void ClearShaderCacheClicked(object sender, RoutedEventArgs e)
@@ -1022,11 +1055,11 @@ public partial class MainWindow : Window
         try
         {
             if (Directory.Exists(shaders)) Directory.Delete(shaders, recursive: true);
-            ShowToast("Shader cache cleared. The first few minutes may stutter while it rebuilds.");
+            ShowToast(L10n.T("Shader cache cleared. The first few minutes may stutter while it rebuilds."));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            ShowToast("Couldn't clear the cache. Close the game first, then try again.");
+            ShowToast(L10n.T("Couldn't clear the cache. Close the game first, then try again."));
         }
     }
 
@@ -1035,7 +1068,7 @@ public partial class MainWindow : Window
 
     private void ShowToast(string message)
     {
-        ToastText.Text = message;
+        ToastText.Text = L10n.T(message);
         Toast.Visibility = Visibility.Visible;
         _toastTimer.Stop();
         _toastTimer.Start();
@@ -1155,7 +1188,7 @@ public partial class MainWindow : Window
         if (_activeKeyField is not null && _activeKeyField != field) SetKeyCaptureIdle(_activeKeyField);
         _activeKeyField = field;
         SetKeyFieldLook(field, listening: true);
-        ((KeyCaptureField)field.Tag!).Text.Text = "listening…";
+        ((KeyCaptureField)field.Tag!).Text.Text = L10n.T("listening…");
     }
 
     private void SetKeyCaptureValue(Border field, string name)

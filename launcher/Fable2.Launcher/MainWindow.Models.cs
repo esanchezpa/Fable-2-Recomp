@@ -35,11 +35,11 @@ public partial class MainWindow
         ModelsRemoveButton.Visibility = downloaded || models.Installed && !models.Custom ? Visibility.Visible : Visibility.Collapsed;
         ModelsDownloadButton.Visibility = Visibility.Visible;
         ModelsDownloadButton.IsEnabled = true;
-        string about = "More detailed characters, creatures and objects for Enhanced, built from your own game files on this PC.";
+        string about = L10n.T("More detailed characters, creatures and objects for Enhanced, built from your own game files on this PC.");
 
         if (models.Custom)
         {
-            ModelsStatusText.Text = models.Installed ? "Using a local model pack (PROJECT_SPARROW_MODELS)." : "The local model pack folder is empty.";
+            ModelsStatusText.Text = models.Installed ? L10n.T("Using a local model pack (PROJECT_SPARROW_MODELS).") : L10n.T("The local model pack folder is empty.");
             ModelsHintText.Text = models.PackFolder;
             ModelsDownloadButton.Visibility = Visibility.Collapsed;
             ModelsRemoveButton.Visibility = Visibility.Collapsed;
@@ -47,42 +47,42 @@ public partial class MainWindow
         }
         if (manifest is not null && complete && built)
         {
-            ModelsStatusText.Text = $"Version {manifest.Version} installed. You're up to date.";
-            ModelsHintText.Text = "Shows when you play Enhanced with Use detailed models on.";
+            ModelsStatusText.Text = string.Format(L10n.T("Version {0} installed. You're up to date."), manifest.Version);
+            ModelsHintText.Text = L10n.T("Shows when you play Enhanced with Use detailed models on.");
             ModelsDownloadButton.Visibility = Visibility.Collapsed;
         }
         else if (manifest is not null && downloaded && !complete)
         {
             ModelsStatusText.Text = pack.State.Version == manifest.Version
-                ? $"Version {manifest.Version}: download stopped part-way."
-                : $"Version {manifest.Version} is available.";
-            ModelsHintText.Text = "Enhanced keeps the original models until the download finishes.";
-            ModelsDownloadButton.Content = pack.State.Version == manifest.Version ? "Resume" : "Update";
+                ? string.Format(L10n.T("Version {0}: download stopped part-way."), manifest.Version)
+                : string.Format(L10n.T("Version {0} is available."), manifest.Version);
+            ModelsHintText.Text = L10n.T("Enhanced keeps the original models until the download finishes.");
+            ModelsDownloadButton.Content = pack.State.Version == manifest.Version ? L10n.T("Resume") : L10n.T("Update");
         }
         else if (complete && !built)
         {
-            ModelsStatusText.Text = "Downloaded; the models still need to be built for your game files.";
-            ModelsHintText.Text = "Takes a few minutes and about " + TexturePack.FormatSize(ModelPack.BuildBytes(_home.GameFolder))
-                                  + " of disk space. It also runs on its own when you play Enhanced.";
-            ModelsDownloadButton.Content = "Build";
+            ModelsStatusText.Text = L10n.T("Downloaded; the models still need to be built for your game files.");
+            ModelsHintText.Text = L10n.T("Takes a few minutes and about {0} of disk space. It also runs on its own when you play Enhanced.",
+                                  TexturePack.FormatSize(ModelPack.BuildBytes(_home.GameFolder)));
+            ModelsDownloadButton.Content = L10n.T("Build");
         }
         else if (complete)
         {
-            ModelsStatusText.Text = $"Version {pack.State.Version} installed.";
-            ModelsHintText.Text = "Shows when you play Enhanced with Use detailed models on.";
-            ModelsDownloadButton.Content = "Check for updates";
+            ModelsStatusText.Text = string.Format(L10n.T("Version {0} installed."), pack.State.Version);
+            ModelsHintText.Text = L10n.T("Shows when you play Enhanced with Use detailed models on.");
+            ModelsDownloadButton.Content = L10n.T("Check for updates");
         }
         else if (manifest is not null)
         {
-            ModelsStatusText.Text = $"Version {manifest.Version}: {TexturePack.FormatSize(manifest.TotalBytes)} to download.";
+            ModelsStatusText.Text = string.Format(L10n.T("Version {0}: {1} to download."), manifest.Version, TexturePack.FormatSize(manifest.TotalBytes));
             ModelsHintText.Text = about;
-            ModelsDownloadButton.Content = "Download";
+            ModelsDownloadButton.Content = L10n.T("Download");
         }
         else
         {
-            ModelsStatusText.Text = "Not installed.";
-            ModelsHintText.Text = _modelsChecked ? "No model pack has been published yet." : about;
-            ModelsDownloadButton.Content = "Download";
+            ModelsStatusText.Text = L10n.T("Not installed.");
+            ModelsHintText.Text = _modelsChecked ? L10n.T("No model pack has been published yet.") : about;
+            ModelsDownloadButton.Content = L10n.T("Download");
         }
     }
 
@@ -109,7 +109,7 @@ public partial class MainWindow
         string? done = null;
         try
         {
-            ModelsStatusText.Text = "Looking for the newest model pack…";
+            ModelsStatusText.Text = L10n.T("Looking for the newest model pack…");
             TexturePackManifest? manifest;
             try { manifest = await pack.FetchManifestAsync(cancel); }
             catch (Exception) when (_modelsManifest is not null || Models.Downloaded) { manifest = _modelsManifest; }   // offline: build what's here
@@ -132,8 +132,8 @@ public partial class MainWindow
                 ModelsPauseButton.Visibility = Visibility.Visible;
                 ModelsBar.Visibility = Visibility.Visible;
                 ModelsBar.Value = 0;
-                ModelsStatusText.Text = $"Downloading version {manifest.Version}…";
-                ModelsHintText.Text = "You can close the launcher in the meantime; the download resumes where it stopped.";
+                ModelsStatusText.Text = string.Format(L10n.T("Downloading version {0}…"), manifest.Version);
+                ModelsHintText.Text = L10n.T("You can close the launcher in the meantime; the download resumes where it stopped.");
                 List<TexturePackPart> missing = pack.MissingParts(manifest);
                 long total = Math.Max(1, missing.Sum(part => part.Size));
                 var doneBytes = new Dictionary<string, long>();
@@ -141,7 +141,7 @@ public partial class MainWindow
                 {
                     doneBytes[p.Name] = p.Status is PartStatus.Installed or PartStatus.Verifying or PartStatus.Unpacking ? p.Size : p.Done;
                     ModelsBar.Value = (double)doneBytes.Values.Sum() / total;
-                    ModelsHintText.Text = $"{TexturePack.FormatSize(doneBytes.Values.Sum())} of {TexturePack.FormatSize(total)}";
+                    ModelsHintText.Text = string.Format(L10n.T("{0} of {1}"), TexturePack.FormatSize(doneBytes.Values.Sum()), TexturePack.FormatSize(total));
                 });
                 await pack.DownloadAsync(manifest, progress, cancel);
             }
@@ -152,15 +152,15 @@ public partial class MainWindow
             var steps = new Progress<(string Step, double Fraction)>(p =>
             {
                 ModelsBar.Value = p.Fraction;
-                ModelsStatusText.Text = "Building the detailed models: " + p.Step.ToLowerInvariant() + "…";
+                ModelsStatusText.Text = L10n.T("Building the detailed models: ") + p.Step.ToLowerInvariant() + "…";
             });
-            ModelsHintText.Text = "This takes a few minutes. Your game folder isn't changed.";
+            ModelsHintText.Text = L10n.T("This takes a few minutes. Your game folder isn't changed.");
             SparrowModels.Result? result = await BuildModelsAsync(steps);
-            if (result is not null) done = $"Detailed models installed ({result.Models} models). They show when you play Enhanced.";
+            if (result is not null) done = string.Format(L10n.T("Detailed models installed ({0} models). They show when you play Enhanced."), result.Models);
         }
         catch (OperationCanceledException)
         {
-            ModelsHintText.Text = "Paused. The download resumes where it stopped.";
+            ModelsHintText.Text = L10n.T("Paused. The download resumes where it stopped.");
         }
         catch (TexturePackException exception) { failure = exception.Message; }
         catch (Exception exception) { failure = exception.Message; }
