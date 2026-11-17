@@ -1107,6 +1107,25 @@
                     </DockPanel>
                   </Border>
 
+                  <TextBlock Text="LANGUAGE" Style="{StaticResource PageSection}" />
+                  <Border Style="{StaticResource Row}">
+                    <DockPanel>
+                      <ComboBox x:Name="LanguageCombo" DockPanel.Dock="Right" SelectionChanged="SettingChanged">
+                        <ComboBoxItem Tag="0">Game default</ComboBoxItem>
+                        <ComboBoxItem Tag="1">English</ComboBoxItem>
+                        <ComboBoxItem Tag="5">Español</ComboBoxItem>
+                        <ComboBoxItem Tag="7">한국어</ComboBoxItem>
+                        <ComboBoxItem Tag="8">中文（繁體）</ComboBoxItem>
+                        <ComboBoxItem Tag="11">Polski</ComboBoxItem>
+                        <ComboBoxItem Tag="12">Русский</ComboBoxItem>
+                      </ComboBox>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Game language" Style="{StaticResource PageText}" />
+                        <TextBlock Text="Uses the language data included in your game copy" Style="{StaticResource PageHint}" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+
                   <TextBlock Text="MODERN TEXTURES" Style="{StaticResource PageSection}" />
                   <Border Padding="14,12" CornerRadius="6" Background="{DynamicResource WellPage}" BorderBrush="{DynamicResource PageLine}"
                           BorderThickness="1">

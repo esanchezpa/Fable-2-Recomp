@@ -9,12 +9,12 @@ public static class GraphicsSettings
     [
         "resolution", "window_width", "window_height", "resolution_scale",
         "anisotropic_override", "swap_post_effect", "vsync", "fullscreen", "fullscreen_exclusive",
-        "frame_limit", "guest_vblank_pacing", "host_frame_limit"
+        "frame_limit", "guest_vblank_pacing", "host_frame_limit", "user_language"
     ];
 
     public static Dictionary<string, string> Create(string resolution, string scale,
         string anisotropic, string antiAliasing, string displayMode, bool vsync,
-        string frameLimit = "0", string hostFrameLimit = "0")
+        string frameLimit = "0", string hostFrameLimit = "0", string userLanguage = "0")
     {
         (int width, int height) = resolution switch
         {
@@ -47,7 +47,11 @@ public static class GraphicsSettings
             ["guest_vblank_pacing"] = (frameLimit == "30").ToString().ToLowerInvariant(),
             ["host_frame_limit"] = hostFrameLimit,
             ["fullscreen"] = (displayMode != "windowed").ToString().ToLowerInvariant(),
-            ["fullscreen_exclusive"] = (displayMode == "exclusive").ToString().ToLowerInvariant()
+            ["fullscreen_exclusive"] = (displayMode == "exclusive").ToString().ToLowerInvariant(),
+            // XLanguage id for the guest's console locale (0 = the title's own
+            // default). The seed in fable_2_app.h only applies while the cvar is
+            // at its built-in default, so an explicit value here always wins.
+            ["user_language"] = userLanguage
         };
     }
 }

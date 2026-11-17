@@ -311,6 +311,7 @@ public partial class MainWindow : Window
             SelectByTag(AntiAliasingCombo, fresh ? edition.AntiAliasing : Unquote(Get("swap_post_effect", "none")));
             SelectByTag(FrameLimitCombo, fresh ? edition.FrameLimit : Get("frame_limit", "30"));
             SelectByTag(HostFrameLimitCombo, Get("host_frame_limit", "0"));
+            SelectByTag(LanguageCombo, Get("user_language", "0"));
             bool fullscreen = ParseBool(Get("fullscreen", "true"), true);
             bool exclusive = ParseBool(Get("fullscreen_exclusive", "false"), false);
             SelectByTag(DisplayModeCombo, !fullscreen ? "windowed" : exclusive ? "exclusive" : "borderless");
@@ -400,7 +401,8 @@ public partial class MainWindow : Window
             Dictionary<string, string> graphics = GraphicsSettings.Create(TagOf(ResolutionCombo, "720p"),
                 TagOf(RenderScaleCombo, "1"), TagOf(AnisotropicCombo, "-1"), TagOf(AntiAliasingCombo, "none"),
                 TagOf(DisplayModeCombo, "borderless"), VsyncCheck.IsChecked == true,
-                TagOf(FrameLimitCombo, "30"), TagOf(HostFrameLimitCombo, "0"));
+                TagOf(FrameLimitCombo, "30"), TagOf(HostFrameLimitCombo, "0"),
+                TagOf(LanguageCombo, "0"));
             LauncherConfigFile.WriteValues(_home.GraphicsConfigPath, graphics, GraphicsSettings.ManagedKeys);
             LauncherConfigFile.WriteValues(_home.LauncherGraphicsPath, graphics, GraphicsSettings.ManagedKeys);
             CollectRecomp();
