@@ -14,12 +14,10 @@
 // writer (stored / uncompressed zlib deflate blocks, so there is no dependency
 // on GDI+, libpng, or any codec DLL).
 //
-// WHY THIS (instead of a screen/window capture)
-//  - It reads the game's OWN rendered frame, so it is exactly "the on-screen
-//    frame" and is isolated from every other window: occluding windows, the
-//    taskbar, and other monitors never appear in the picture. This is the
-//    robust behavior we want from a screenshot, and it holds even while other
-//    windows cover the game.
+// WHAT THIS CAPTURES (instead of a screen/window capture)
+//  - It reads the latest guest-output texture available from the presenter.
+//    This is isolated from other windows: occlusion, the taskbar, and other
+//    monitors do not appear in the image.
 //  - It is backend-agnostic: both the D3D12 and Vulkan presenters implement
 //    CaptureGuestOutput, so it works for --gpu_plugin=xenos and
 //    --gpu_plugin=xenos-vulkan alike.
@@ -27,9 +25,10 @@
 //    touches the display or DWM, whose redirection-surface readback is
 //    flaky there (foreground windows come back black). Reading the guest
 //    output straight from GPU memory is not affected by that.
-//  - The captured frame is the guest output at the guest's native resolution
-//    (e.g. 1920x1080), before any host-side scaling / letterboxing, so it is
-//    the true game frame.
+//  - The image is the guest output before final host composition (including
+//    host-side scaling, letterboxing, and UI). CaptureGuestOutput does not
+//    return the guest_output_id, identify a matching DXGI Present, or prove
+//    that the captured contents were displayed or scanned out.
 //
 // COST
 // A capture is one GPU-to-CPU readback plus a ~15 MB write; it blocks the
