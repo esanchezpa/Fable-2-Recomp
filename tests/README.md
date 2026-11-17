@@ -24,6 +24,15 @@ If `python` isn't found, use `python3`. The Python tests run with
 [pytest](https://docs.pytest.org/). `pytest.ini` in the repository root sets
 them up to print one line per test.
 
+On Windows, `build.cmd` automatically uses the storage guard and adds the
+Visual Studio 18 CMake directory to that process's PATH. Launch gameplay only
+from a copied game tree under `D:\QA-Storage` with
+`tools\qa_gameplay.cmd <managed-game-copy> [d3d12|vulkan|prebuilt] [timeout-seconds]`.
+The gameplay runner requires a bounded frame-event CSV on D: and stops if the
+trace does not appear. Run other QA processes through
+`python tools/qa_storage_guard.py run --repo-root . --timeout-seconds 600 -- <command> ...`.
+The generic runner rejects WPR/logman/xperf; it is not an ETW capture tool.
+
 ## The test suites
 
 | Suite | Command | Needs | In CI? |
@@ -56,13 +65,19 @@ Checks that the generated files in `constants/` match
 | `tools/repro/test_normalize_pe.py` | The stable-hash step pins timestamps and the PDB GUID, so two builds come out identical. It leaves files that aren't a PE alone, skips missing files, and exits with 2 on a broken PE. Three known bugs are marked as expected failures |
 | `tools/repro/test_trim_exports.py` | The standalone export trimmer keeps only the names in a `.def`, keeps each pointing at its own function, and leaves a file alone when it isn't a PE, has no exports or matches nothing in the `.def` |
 | `tools/test_apply_recomp_patches.py` | The patch step applies each patch once, fails on a missing anchor and honors its on/off switch. One known issue is marked as an expected failure |
+| `tools/test_build_python_selection.py` | On Windows, runs an isolated copy of `build.cmd` with stub build tools, verifies the process-local CMake PATH override, and checks that it does not force an account-specific Python interpreter |
+| `tools/test_qa_storage_guard.py` | Checks C:/D: start/stop thresholds and budget, managed gameplay launch, D:-only paths, temp redirection, real child/descendant timeout isolation, bounded log/trace stops, ETW rejection, and evidence-preserving cleanup. Windows integration tests use disposable fixtures under `D:\QA-Storage` |
+| `tools/test_qa_icon_atlas.py` | Parses GUI texture banks and KBPM v2 sidecars, verifies byte-for-byte matching and synthetic Xenos A2 detiling, and ensures an end-to-end atlas audit does not overwrite existing PNG evidence. |
+| `tools/test_shader_prebuild_list.py` | Parses and validates the shader pre-build text format used by src/core/shader_prebuild.cpp, including headers, xex/bank shader records, patches, and 72-byte pipeline records. It does not rebuild shaders or touch game data. |
+| `tools/test_perf_sampler_contract.py` | Checks sampler load/tick ordering, opt-in ring/overwrite behavior, console lifecycle commands, no I/O in sample path, and runtime-state restoration in the Lua test harness. Source-contract checks do not replace in-game Lua runtime validation. |
+| `tools/test_qa_s3_replay.py` | Checks deterministic S3 replay planning, QPC marker safety, trace parsing and summary boundaries using synthetic evidence. It does not run the game. |
 | `tools/test_fable2_control.py` | Each command sends the request the server expects, `state` strips spaces from button names and keeps values of 0, a token login goes first and stops on a bad token, and connection errors and timeouts are reported as JSON. One known issue is marked as an expected failure |
 | `tools/test_game_versions.py` | Generated version files match the catalogue, invalid or duplicate entries are rejected, the default profile must be compatible and in the validated code group, only those versions get a CMake profile, and `--check` reports stale files. One known issue is marked as an expected failure |
 | `tools/test_make_hotfunc_overrides.py` | The override generator extracts and transforms functions correctly and never overwrites a hand-tuned file. Four known issues are marked as expected failures |
 | `tools/test_manifest_collisions.py` | The check for manifest names that clash with DLL exports reports every clash, ignores commented-out names, rejects a missing, unreadable or empty DLL, and the real manifest avoids the kernel wait names that once broke audio. One known issue is marked as an expected failure |
 | `tools/test_mouse_log_format.py` | The lines the game writes to `fable2_mouse.log` (poll lines from `src/input/mouse_diag.h`, camera updates from `mouse_diag.lua` with the direct mouse camera's turn, and the `f2 mouse inject` and `f2 mouse mode` notes) are read the way `mouse_stats.py` expects. Reads the format strings from the source, so a renamed field fails here |
 | `tools/test_mouse_stats.py` | The `fable2_mouse.log` summariser splits the log into one run per `f2 mouse inject`, counts polls and camera updates, works out how much movement the camera saw with and without smoothing, scores the steady yaw per update while leaving out the ends of a run, adds up the total turn (stick and direct mouse camera) with the share that coasted on after the input stopped and how fast the turn got going, labels each run with its speed profile and mouse mode, ends a run early at its `f2 mouse stop` note, and prints the text and JSON reports |
-| `tools/test_package_release.py` | The release zip holds only the listed files, its build info is stamped with the version while the build folder's copy stays unstamped, symbols stay separate, checksums match, files from an earlier package are removed, and a missing file, symbol file or recomp Lua script stops packaging before anything is written |
+| `tools/test_package_release.py` | The release zip holds only the listed files, including the bundled font and license; its build info is stamped while the build folder's copy stays unstamped, symbols stay separate, checksums match, files from an earlier package are removed, and missing inputs stop packaging before anything is written |
 | `tools/test_prepare_renderer_mspack.py` | The libmspack fallback replaces symlinks that Windows checked out as text files with their targets' contents, and reports how many it replaced. It leaves ordinary files and real symlinks alone, and also works on a second run, a deleted file or a trailing newline. It stops when the checkout isn't at the public pin, a target is missing or outside the checkout, or a file has local edits. Uses small throwaway git repos |
 | `tools/test_prepare_runtime_sdk.py` | The SDK prepare step rejects a missing or non-git folder and a checkout without libmspack, skips setup with `--skip-dependencies`, marks libmspack stored as plain files as set up (also on a second run), repins libmspack stored as a submodule, and says a failed submodule update needs network access. Uses small throwaway git repos. Two known issues are marked as expected failures |
 | `tools/test_runtime_staging.py` | Debug and Release builds stage the SDK files, and staging fails before copying if an input is missing |

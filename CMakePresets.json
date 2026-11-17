@@ -121,6 +121,21 @@
             }
         },
         {
+            "name": "win-amd64-release-tracy-sdk",
+            "displayName": "Windows AMD64 Tracy SDK only (opt-in, isolated output)",
+            "inherits": "windows-base",
+            "binaryDir": "${sourceDir}/out/build/win-amd64-release-tracy-sdk",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O3 -DNDEBUG -g",
+                "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O3 -DNDEBUG -g -msse4.1",
+                "FABLE2_NO_PE_CLEAN": "ON",
+                "REXSDK_DIR": "${sourceDir}/thirdparty/rexglue-sdk",
+                "REXGLUE_ENABLE_TRACY": "ON",
+                "REXGLUE_OUTPUT_ROOT": "${sourceDir}/out/build/win-amd64-release-tracy-sdk/sdk-runtime"
+            }
+        },
+        {
             "name": "linux-amd64-debug",
             "displayName": "Linux AMD64 Debug",
             "inherits": "linux-base",

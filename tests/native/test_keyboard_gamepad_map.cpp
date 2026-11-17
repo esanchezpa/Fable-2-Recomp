@@ -20,7 +20,7 @@ namespace rex::cvar {
 std::optional<size_t> RegisterFlag(FlagEntry) { return {}; }
 }
 
-// src/input/keyboard_gamepad.h calls fable2::f5lua::poll_f5() from the
+// src/input/keyboard_gamepad.h calls fable2::f5lua::poll_f5(focused) from the
 // driver's per-frame poll (real declaration: src/core/fable2_f5_lua.h).
 // This test never instantiates the driver, so a bare declaration suffices
 // and the symbol is never emitted.

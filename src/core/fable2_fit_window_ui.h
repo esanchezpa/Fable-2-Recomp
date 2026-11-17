@@ -954,15 +954,56 @@ inline void NoteBink(int entry) {
 }  // namespace fable2::fitwindow::ui::detail
 
 namespace fable2::fitwindow::ui {
+// NOTE (Round 19/21): a timer-based hold ("grace") after the last Bink call
+// was tried and reverted as ineffective (analysis-visual-flicker-fix.json):
+// the visible flash sits right before the next clip's BinkOpen, which no
+// silence-based timeout can cover. Round 20 then attributed the flicker to
+// the ~1 Hz desired-state ALTERNATION itself (attract clips alternating with
+// real menu loads) - which the debounce below addresses directly.
+// Letterbox toggle debounce: the attract sequence flips the desired letterbox
+// state ~1.3x/s (video clips alternating with real menu/presentation loads -
+// analysis-flicker-diagnostic.json counted 1160 toggles in ~15 min), and
+// applying every flip is the visible ~1 Hz flicker. With the debounce, a
+// toggle only happens after the desired state has persisted
+// `fit_window_debounce_ms`; state changes shorter than that (attract
+// micro-states) never reframe the image. 0 restores the old behavior.
+REXCVAR_DEFINE_INT32(fit_window_debounce_ms, 800, "Fit-window",
+                     "Require the letterbox state to persist this many ms "
+                     "before applying a toggle, in both directions; suppresses "
+                     "the attract sequence's ~1 Hz framing flashes. 0 restores "
+                     "the previous immediate toggling. Default: 800.");
 // Call once a frame (the console poll does). Switches letterboxing on while a
 // video plays and back off after, if the fit is on.
 inline void TickVideo() {
   static bool playing = false;
+  static bool desired_valid = false;
+  static bool desired_state = false;
+  static int64_t desired_since_ms = 0;
   const int64_t last = detail::g_bink_last_ms.load(std::memory_order_relaxed);
   // A menu's own preview video (Abilities) is not a full-screen video.
   const bool menu_up = detail::NowMs() - g_menu_ms.load(std::memory_order_relaxed) < 600;
   const bool now_playing = last != 0 && detail::NowMs() - last < 300 && !menu_up;
-  if (now_playing == playing) return;
+  const int64_t debounce_ms = (int64_t)REXCVAR_GET(fit_window_debounce_ms);
+  if (now_playing == playing) {
+    desired_valid = false;
+    return;
+  }
+  if (!desired_valid || desired_state != now_playing) {
+    desired_state = now_playing;
+    desired_since_ms = detail::NowMs();
+    desired_valid = true;
+  }
+  const int64_t pending_ms = detail::NowMs() - desired_since_ms;
+  if (debounce_ms > 0 && pending_ms < debounce_ms) {
+    return;  // hold the current framing until the new state persists
+  }
+  if (debounce_ms > 0) {
+    REXSYS_INFO("[fit-window-debounce] letterbox {}->{} after {} ms of "
+                "persistent context (debounce {} ms)",
+                playing ? "on" : "off", now_playing ? "on" : "off",
+                (long long)pending_ms, (long long)debounce_ms);
+  }
+  desired_valid = false;
   playing = now_playing;
   if (rex::cvar::GetFlagByName("fit_game_to_window") != "true") return;
   rex::cvar::SetFlagByName("present_letterbox", playing ? "true" : "false");

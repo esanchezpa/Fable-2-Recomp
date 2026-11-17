@@ -1,9 +1,11 @@
 """Check that add_version_resource.py grafts version info into a DLL, using fake PE files."""
 import contextlib
+import gc
 import importlib.util
 import io
 from pathlib import Path
 import struct
+import warnings
 from unittest.mock import patch
 
 import pytest
@@ -169,6 +171,16 @@ def describe_add_version_resource():
 
         assert result
         assert RT_VERSION in resource_types(pe)
+
+    def test_should_close_dll_file_handles(dll):
+        dll.write_bytes(build_pe({RT_MANIFEST: MANIFEST}))
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            version_resource.add_version_resource(str(dll), FIELDS)
+            gc.collect()
+
+        assert [warning for warning in caught if issubclass(warning.category, ResourceWarning)] == []
 
     def test_should_write_the_given_fields(dll):
         _, pe = add(dll, build_pe({RT_MANIFEST: MANIFEST}))
