@@ -37,6 +37,8 @@
 #include <rex/ppc/context.h>
 #include <rex/system/xmemory.h>
 
+#include "fable2_config.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>

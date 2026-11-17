@@ -70,10 +70,13 @@ namespace fable2::console {
 // fable_2_app.h always registers (the remote-pad driver, fed from this store),
 // so menus and the intro can be driven from console\in.txt or autoexec.txt
 // without window focus.
-inline fable2::remote::InputStateStore& PadStore() {
-  static fable2::remote::InputStateStore s;
-  return s;
+// PadStoreN(0) is player 1; 1-3 are the pads pinned to guest users 1-3
+// (`pad p2 A`), for local co-op tests.
+inline fable2::remote::InputStateStore& PadStoreN(int user) {
+  static fable2::remote::InputStateStore s[4];
+  return s[user & 3];
 }
+inline fable2::remote::InputStateStore& PadStore() { return PadStoreN(0); }
 inline std::atomic<bool>& PadEnabled() {
   static std::atomic<bool> on{true};
   return on;
@@ -154,6 +157,11 @@ struct State {
   bool lua_wait = false;        // a dispatched line has not reported done yet
   Clock::time_point lua_deadline{};
   uint64_t pad_frames = 0;      // `pad` releases its buttons when this reaches 0
+  uint64_t pad_frames_n[4] = {0, 0, 0, 0};  // same for `pad p2|p3|p4` (index 0 unused)
+  // `pad glide`: the left stick eases from glide_from to glide_to over glide_len
+  // frames (smoothstep), then stays there until the next pad command.
+  float glide_from[2] = {0, 0}, glide_to[2] = {0, 0}, glide_cur[2] = {0, 0};
+  uint64_t glide_len = 0, glide_pos = 0;
   // pause: the game thread waits at the end of the console poll; see hold_paused.
   bool paused = false;
   uint64_t step_frames = 0;     // frames to run before pausing again ("step")
@@ -580,7 +588,7 @@ inline bool run_gui_command(const std::string& name, const std::vector<std::stri
 // Returns true when the line was a host command (handled here), false to run it in Lua.
 inline bool run_host_command(const std::string& line, uint8_t* base) {
   State& s = S();
-  const auto W = split_words(line);
+  auto W = split_words(line);  // not const: `pad p2` drops its player word
   if (W.empty()) return true;
   std::string name = W[0];
   for (auto& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -1009,28 +1017,74 @@ inline bool run_host_command(const std::string& line, uint8_t* base) {
   }
   if (name == "pad") {
     // pad <A|B|X|Y|LB|RB|LT|RT|Up|Down|Left|Right|Start|Back|L3|R3>[+...] [frames]
-    // pad stick <lx> <ly> [frames]  (-32768..32767, ly + = forward)  |  pad off
+    // pad stick <lx> <ly> [frames]  (-32768..32767, ly + = forward)  |  pad look <rx> <ry> [frames]  |  pad off
     // Holds the input for frames (default 12: menus miss 6), then releases it. While held
     // the command queue waits, so "pad A; pad Down; pad A" are separate presses.
     static const std::pair<const char*, uint16_t> kBtn[] = {
         {"up", 0x0001}, {"down", 0x0002}, {"left", 0x0004}, {"right", 0x0008}, {"start", 0x0010},
         {"back", 0x0020}, {"l3", 0x0040}, {"r3", 0x0080}, {"lb", 0x0100}, {"rb", 0x0200},
         {"a", 0x1000}, {"b", 0x2000}, {"x", 0x4000}, {"y", 0x8000}};
-    if (W.size() < 2) return out("pad", "usage: pad <button>[+button] [frames] | pad stick <lx> <ly> [frames] | pad off", true), true;
+    if (W.size() < 2) return out("pad", "usage: pad <button>[+button] [frames] | pad stick <lx> <ly> [frames] | pad look <rx> <ry> [frames] | pad off", true), true;
     fable2::remote::InputSnapshot snap;
+    // `pad p2 ...` (p1-p4) targets that player's pad; p1 is the default.
+    int user = 0;
+    {
+      std::string p = W[1];
+      for (auto& c : p) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      if (p.size() == 2 && p[0] == 'p' && p[1] >= '1' && p[1] <= '4') {
+        user = p[1] - '1';
+        W.erase(W.begin() + 1);
+        if (W.size() < 2) return out("pad", "usage: pad [p1-p4] <button>[+button] [frames]", true), true;
+      }
+    }
     size_t fi = 2;
     std::string what = W[1];
     for (auto& c : what) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (user != 0 && (what == "glide")) return out("pad", "glide is player 1 only", true), true;
+    if (user != 0 && what == "off") {
+      PadStoreN(user).Publish({});
+      s.pad_frames_n[user] = 0;
+      return out("pad", "released"), true;
+    }
     if (what == "off") {
       PadStore().Publish({});
       s.pad_frames = 0;
+      s.glide_len = s.glide_pos = 0;
+      s.glide_cur[0] = s.glide_cur[1] = 0;
       return out("pad", "released"), true;
+    }
+    if (what == "glide") {
+      // pad glide <lx> <ly> <frames>: ease the left stick from where it is to
+      // (lx, ly) over frames, then keep holding it (no release, no gap), so a
+      // run of glides steers like a person. `pad glide 0 0 <n>` eases to a stop.
+      int64_t lx = 0, ly = 0;
+      uint64_t frames = 0;
+      if (W.size() < 5 || !parse_i(W[2], lx) || !parse_i(W[3], ly) || !parse_u(W[4], frames) ||
+          frames == 0 || frames > 100000)
+        return out("pad", "usage: pad glide <lx> <ly> <frames>", true), true;
+      s.pad_frames = 0;
+      s.glide_from[0] = s.glide_cur[0];
+      s.glide_from[1] = s.glide_cur[1];
+      s.glide_to[0] = static_cast<float>(std::clamp<int64_t>(lx, -32768, 32767));
+      s.glide_to[1] = static_cast<float>(std::clamp<int64_t>(ly, -32768, 32767));
+      s.glide_len = frames;
+      s.glide_pos = 0;
+      s.wait_frames = frames;
+      s.wait_time = false;
+      return true;
     }
     if (what == "stick") {
       int64_t lx = 0, ly = 0;
       if (W.size() < 4 || !parse_i(W[2], lx) || !parse_i(W[3], ly)) return out("pad", "usage: pad stick <lx> <ly> [frames]", true), true;
       snap.stk_lx = static_cast<int32_t>(std::clamp<int64_t>(lx, -32768, 32767));
       snap.stk_ly = static_cast<int32_t>(std::clamp<int64_t>(ly, -32768, 32767));
+      fi = 4;
+    } else if (what == "look") {
+      // pad look <rx> <ry> [frames]: hold the right stick (turns the camera).
+      int64_t rx = 0, ry = 0;
+      if (W.size() < 4 || !parse_i(W[2], rx) || !parse_i(W[3], ry)) return out("pad", "usage: pad look <rx> <ry> [frames]", true), true;
+      snap.stk_rx = static_cast<int32_t>(std::clamp<int64_t>(rx, -32768, 32767));
+      snap.stk_ry = static_cast<int32_t>(std::clamp<int64_t>(ry, -32768, 32767));
       fi = 4;
     } else {
       std::stringstream ss(what);
@@ -1047,8 +1101,15 @@ inline bool run_host_command(const std::string& line, uint8_t* base) {
     uint64_t frames = 12;
     if (W.size() > fi && (!parse_u(W[fi], frames) || frames == 0 || frames > 100000))
       return out("pad", "bad frame count", true), true;
-    PadStore().Publish(snap);
-    s.pad_frames = frames;
+    if (user != 0) {
+      PadStoreN(user).Publish(snap);
+      s.pad_frames_n[user] = frames;
+    } else {
+      s.glide_len = s.glide_pos = 0;
+      s.glide_cur[0] = s.glide_cur[1] = 0;
+      PadStore().Publish(snap);
+      s.pad_frames = frames;
+    }
     s.wait_frames = frames + 2;  // hold, then a short gap before the next command
     s.wait_time = false;
     return true;
@@ -1490,18 +1551,16 @@ inline void write_state_file() {
 
 // Lua commands run inside the game's own script update (console_pump.lua), not
 // from this hook: calling RunScript per command from MainRenderLoop raced the
-// game's Lua and corrupted the VM. RunScript is used once, to install the pump.
+// game's Lua and corrupted the VM. RunScript is used once, to install the pump,
+// and even that goes to the game thread (f5lua::request_run): this hook runs on
+// the render thread, and the one direct install still crashed now and then.
 inline void start_pump(PPCContext& ctx, uint8_t* base) {
+  (void)ctx;
+  (void)base;
   State& s = S();
   s.pump_requested = true;
   s.pump_req_time = Clock::now();
-  const PPCContext saved = ctx;
-  try {
-    const std::string path = "scripts/recomp/console_pump.lua";
-    f5lua::run_external(ctx, base, &path);
-  } catch (...) {
-  }
-  ctx = saved;
+  f5lua::request_run("scripts/recomp/console_pump.lua");
 }
 
 // Hands one line to the pump: console_run.lua = `return <seq>, [==[line]==]`.
@@ -1634,6 +1693,18 @@ inline void poll(PPCContext& ctx, uint8_t* base) {
   ++s.frames;
   if (s.step_frames) --s.step_frames;
   if (s.pad_frames && --s.pad_frames == 0) PadStore().Publish({});
+  for (int u = 1; u < 4; ++u)
+    if (s.pad_frames_n[u] && --s.pad_frames_n[u] == 0) PadStoreN(u).Publish({});
+  if (s.glide_len && s.glide_pos < s.glide_len) {
+    ++s.glide_pos;
+    const float t = static_cast<float>(s.glide_pos) / static_cast<float>(s.glide_len);
+    const float e = t * t * (3.0f - 2.0f * t);
+    fable2::remote::InputSnapshot snap;
+    for (int i = 0; i < 2; ++i) s.glide_cur[i] = s.glide_from[i] + (s.glide_to[i] - s.glide_from[i]) * e;
+    snap.stk_lx = static_cast<int32_t>(s.glide_cur[0]);
+    snap.stk_ly = static_cast<int32_t>(s.glide_cur[1]);
+    PadStore().Publish(snap);
+  }
   poll_pause_key();
   if (s.frames == 1)
     f5lua::logline("[console] %s active, root=%s\n", FABLE2_CONSOLE_BUILD, s.root.string().c_str());

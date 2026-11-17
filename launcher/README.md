@@ -1,73 +1,147 @@
-# Windows launcher
+# Project Sparrow launcher
 
-A .NET 8 WPF settings launcher for verified GOTY USA/Europe and German GOTY
-dumps. It validates the original XEX and content markers, then checks the
-native build descriptor. Unknown revisions and known mixed retail/TU1 content
-are rejected; original game files are never modified.
+A .NET 8 WPF launcher for the Fable II recompilation. The design reference is
+[design/mockup.html](design/mockup.html): the window is a storybook night
+scene with a centred title, a gold seal as the main button, an edition ribbon
+at the bottom, and a parchment page that turns in from the right edge for
+Settings, Controls, Updates and Help.
 
-## Extracting from an ISO
+## Where files live
 
-"Extract from ISO" opens a file picker for a raw Xbox 360 disc image (`.iso`)
-and extracts straight into the folder the launcher is running from (next to
-`fable_2.exe`) — there is no destination picker. The ISO content is written in
-two phases:
+The install folder (next to `Fable2Launcher.exe` and `fable_2.exe`) is
+replaced by every update, so nothing the player owns is kept there.
 
-1. **`default.xex` only** — extracted and SHA-256-hashed first.
-2. **The remaining disc** (`data`, `nxeart`, `$SystemUpdate`, …) — written if
-   the hash matches a known-good build in the version catalogue
-   (`GameCompatibilityInspector.CheckHash`, same catalogue the launcher uses
-   to validate game folders). If the hash does **not** match, extraction pauses
-   on the progress screen with the reason and a red **Extract Anyways** button:
-   click it to keep the XEX and write the rest of the disc, or press **Stop**
-   to bail out (which deletes the ~21 MB XEX so nothing partial is left behind).
+```
+%LOCALAPPDATA%\ProjectSparrow-Data\        home folder, never moves
+  launcher.json                            data folder, game folder, channel, edition, theme
+  fable_2.toml  launcher-settings.toml     graphics settings
+  fable2_config.toml                       keys, mouse, patches
+  saves\  cache\  logs\
+  game\    default.xex  data\ ...          copied from the player's own disc image
+```
 
-On success the launcher's folder is automatically set as the selected game
-folder. The
-GDFX/ISO 9660 readers come from the shared `X360Extract` library
-(`tools/x360extract/lib`, referenced as a project dependency), so the output is
-byte-for-byte identical to the standalone `x360extract` tool; STFS containers
-are copied raw.
+- **Change data folder** (Help) moves everything except `launcher.json` to
+  another folder, for example a bigger drive. It must be an empty folder.
+- **Use game files from another folder** points at an existing extracted copy
+  (`default.xex` + `data`) instead of copying.
+- The game is started with `--game_data_root=<game folder>` and
+  `--user_root=<data folder>`, with the data folder as working directory.
+- Before each launch the shipped Lua scripts in
+  `<install>\data\scripts\recomp\` are copied into the game folder (changed
+  files only).
+- `PROJECT_SPARROW_HOME` overrides the home folder: useful for running two
+  copies side by side (multiplayer testing) or testing against a scratch
+  folder.
+- First run after the old portable layout (game files and saves beside the
+  launcher): the launcher uses those game files where they are and copies
+  `saves\` and settings into the data folder. Nothing is deleted.
 
-Settings: 720p/1080p/1440p/4K output, 1x–4x internal render scale, anisotropic
-filtering (game default through 16x), none/FXAA/FXAA Extreme, VSync,
-windowed/borderless/exclusive fullscreen and 30/60/120/144/165/240/unlimited FPS. Output size
-is separate from the original 720p guest mode. The FPS options need the
-matched source-built Release runtime described in
-[the runtime guide](../docs/RUNTIME_FIXES.md). Higher rates are not a promise
-of correct timing in every scene.
+## Disc images
 
-The **Advanced Options** button in the top bar opens a second page for the
-recomp's own settings (stored in `fable2_config.toml` next to `fable_2.exe`,
-separate from the engine's `fable_2.toml`):
+The seal reads **Choose disc image** until game files exist. The chosen `.iso`
+is read in two phases:
 
-- **Keybinds** — the keyboard→gamepad map as a list of editable rows (host key
-  → guest input, with add/remove). Mouse look and mouse sensitivity are also
-  here.
-- **Patches** — a checkbox per recomp-level patch (unlock website/CE, skip
-  intro videos, disable motion blur, realtime texture morphing, hero/dog
-  texture readback, dog-fur depth bias).
-- **Performance** — the hot-function yield-batching factor.
+1. **`default.xex` only**, extracted under a temporary name and SHA-256
+   checked against the version catalogue (`GameCompatibilityInspector.CheckHash`).
+2. **The rest of the disc**, only if the hash is known. An unknown hash pauses
+   with the reason and two buttons: **Copy it anyway** or **Stop** (which
+   deletes the temporary XEX, leaving any earlier `default.xex` untouched).
 
-The Save button writes only the managed keys back to `fable2_config.toml`
-non-destructively: it updates keys in place (keeping indentation, spacing and
-inline comments), appends any missing keys or sections, leaves every other key
-and section untouched, and makes a one-time `.launcher-backup` before the first
-write. Keybind and patch changes take effect the next time the game launches.
+The GDFX/ISO 9660 readers come from the shared `X360Extract` library
+(`tools/x360extract/lib`), so the output matches the standalone tool.
 
 Dropdowns use dark text on a light background, including the selected item.
 The launcher and game use a project-owned book/tree icon documented in
 [asset provenance](../assets/README.md).
 
-Build from the repository root:
+## Modern textures
+
+Settings > Modern textures downloads the pre-built texture pack (about
+6 GB) in 16 parts with a progress bar each, pausable and resumable, from
+the fork's `textures-v<N>` GitHub release. The manifest is signed with the
+release key and every part is checksummed; parts unpack into a temporary
+folder and move into `textures
+eplace` whole, so the game never sees a
+half-written file. `[graphics] texture_pack` in `fable2_config.toml` stays
+`false` until the last part is in. `PROJECT_SPARROW_TEXTURES=<folder>`
+points the download at a local folder holding `manifest.json`, its `.sig`
+and the parts, and `--preview=textures` starts it on launch. Format and
+flow: [docs/TEXTURE_PACK_DOWNLOAD.md](../docs/TEXTURE_PACK_DOWNLOAD.md).
+
+## Editions
+
+| Edition | Sets |
+|---|---|
+| Original | 720p, 1× scale, game texture filtering, no FXAA, 30 fps, motion blur on, Modern graphics off |
+| Enhanced | 1440p, 2× scale, 16× filtering, FXAA, 60 fps, motion blur off, Modern graphics on (Modern textures) |
+| Sparrow Edition | Enhanced, plus the detailed models from the Sparrow model pack |
+
+Sparrow Edition plays from `<data folder>\sparrow-game`: a folder of hard links
+to the player's game files, with the model pack's files (`<data folder>\sparrow-models`,
+laid out like the game folder) in place of the ones it replaces. It is rebuilt
+whenever the pack or the game files change, takes no extra disk space, and needs
+both on the same drive. Without the pack, Sparrow Edition plays with the original
+models. `PROJECT_SPARROW_MODELS` points at a local pack for testing. A saved
+"experimental" edition (removed) loads as Enhanced and keeps the player's settings.
+
+Settings an edition doesn't name keep the player's value. Changing anything an
+edition sets shows **Custom changes** on the ribbon. Settings are written when
+the page closes and before launch; unknown keys in every file are preserved
+and each file gets a one-time `.launcher-backup` before its first write.
+
+## Themes
+
+**Night** (darkest; the page becomes dark leather), **Dusk** (default) and
+**Day** (sunlit scene, sparrows instead of fireflies). Switch with the three
+buttons in the top-left corner or **Settings → Appearance**; the choice is
+saved in `launcher.json`. Colours live in `Themes.cs`: the brushes in
+`MainWindow.xaml` are the Dusk values and are read as `DynamicResource`, so a
+new colour must be added in both places.
+
+## Updates
+
+Installed copies (Velopack, `%LOCALAPPDATA%\ProjectSparrow\`) check
+https://github.com/gitgudscrub/Fable-2-Recomp releases on start and download
+in the background. Stable sees full releases; Beta also sees pre-releases, and
+switching back to Stable installs the newest stable build even if older.
+
+- When an update is ready the seal reads **Restart / to update**, with
+  **Play now, update later** underneath. Closing the launcher without playing
+  also installs it. Nothing installs while `fable_2.exe` is running, since
+  the update replaces the folder it runs from.
+- Every package must have a valid `<file>.sig` (see `UpdateSignature.cs` and
+  `tools/sparrow-sign`); otherwise it's rejected and the Updates page says so.
+- Dev builds and the portable zip aren't installed, so they show no update
+  controls.
+
+## Help tools
+
+- **Report a problem**: zips the last 3 logs, settings files (never saves),
+  `fable2_build.json` and Windows/GPU details to the desktop, then opens a
+  prefilled GitHub issue. Nothing is uploaded automatically.
+- **Check game files**: hashes `default.xex` and every `data/` file and compares
+  them with the disc's reference list (`constants/disc-manifests/<version>.txt`,
+  embedded in the launcher), then lists missing or damaged files and offers to
+  copy them again from the disc image. `data/dir.manifest` is skipped (the game
+  repairs it itself) and extra files are ignored. Versions without a reference
+  list fall back to the version and key-file check. To add a list for another
+  version, run `x360extract <iso> --manifest constants/disc-manifests/<version id>.txt`.
+- **Open save folder**, **Change data folder**, **Clear shader cache**
+  (deletes `cache\shaders` only).
+
+## Building
+
+From the repository root:
 
 ```cmd
-build.cmd launcher                 self-contained (default; ships with .NET)
+build.cmd launcher                 self-contained single file (default; ships with .NET)
 build.cmd launcher-dev             framework-dependent (needs .NET installed)
 dotnet run --project tests/Fable2.Launcher.ConfigTests -c Release
 ```
 
-The tests also cover the extraction hash gate (every known-good hash is
-accepted, every unsupported/unknown hash is rejected before extraction).
+`--page=settings|controls|updates|help` opens the parchment page on start
+(handy for screenshots). `--preview=update-ready` shows the update-ready seal in a dev build.
+`--preview=check-files` opens Help and runs Check game files straight away.
 
 ## Shipping without a .NET install
 
@@ -119,3 +193,8 @@ continue to use the existing save folder beside the executable.
 Launcher overview supplied by the tester (before the high-refresh presets were added):
 
 ![Launcher overview](../docs/screenshots/launcher.png)
+
+Fonts: IM FELL English and Alegreya Sans, embedded as resources under the SIL
+Open Font License (`Fonts/OFL-*.txt`, shipped in the release zip's
+`licenses/`). The icon is the project-owned emblem; see
+[asset provenance](../assets/README.md).

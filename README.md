@@ -1,7 +1,7 @@
 # Fable 2 — ReXGlue Recompiled Project
 First and for most this project was made to test the capabilities of local and open source AI. This project was made using Qwen3.8 27b. After about an hour it got the game running. Then after a large amount of human trial and error I was able to get enough of the functions mapped to be able to complete the game. I currently do not consider this to be fully complete as I have yet to 100% the game. The sha256 of the iso that started this project is: "685a0d3bea9718812f17bcd155907a5359a548b6d3d8342dd2a6c944f45e35ff" and its the Fable 2 GOTY for USA and Europe.
 
-Recompilation of Fable 2 (Xbox 360, title ID 4D5307F1) using the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) v0.10.0, with the SDK built from [the project's fork](https://github.com/himdo/rexglue-sdk). Guest PPC code is statically recompiled to C++ at build time by `rexglue codegen`, driven by `fable_2_manifest.toml`.
+Recompilation of Fable 2 (Xbox 360, title ID 4D5307F1) using the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) v0.10.0, with the SDK built from [the project's fork](https://github.com/gitgudscrub/rexglue-sdk) (branch `fable2`, based on [himdo/rexglue-sdk](https://github.com/himdo/rexglue-sdk)). Guest PPC code is statically recompiled to C++ at build time by `rexglue codegen`, driven by `fable_2_manifest.toml`.
 
 # Important Note:
 **This project does not condone Piracy, any mentions or links will result in removal and an instant ban from this repo!**
@@ -9,13 +9,33 @@ Recompilation of Fable 2 (Xbox 360, title ID 4D5307F1) using the [ReXGlue SDK](h
 # Playing the game
 
 You need your own Fable 2 GOTY disc image (`.iso`) and about 7 GB of free space.
+Nothing on this page contains game files; the launcher copies them from your disc image.
 
-1. Download the `windows` zip from the [latest release](https://github.com/himdo/Fable-2-Recomp/releases/latest) and unzip it anywhere.
-2. Open `Fable2Launcher.exe`.
-3. Click **Extract from ISO** and pick your `.iso`. The game files go into the launcher's folder.
-4. Click **Play Fable II**.
+1. Download `ProjectSparrow-stable-Setup.exe` from the
+   [latest release](https://github.com/gitgudscrub/Fable-2-Recomp/releases/latest)
+   and run it. It installs **Project Sparrow** for your user (no admin needed) and
+   adds desktop and Start menu shortcuts. Windows may warn that the installer is
+   from an unknown publisher, because it isn't code-signed yet: choose
+   **More info → Run anyway**.
+2. Click the gold seal (**Choose disc image**) and pick your `.iso`. It's checked
+   against the supported versions, then the game files are copied into your data
+   folder.
+3. Click **Play**.
 
-**Updating:** unzip the new release into its own folder, copy your `saves` folder across and extract your `.iso` again.
+**Updating** is automatic. Project Sparrow checks for updates when it starts and
+downloads them in the background; when one is ready the seal reads
+**Restart / to update**. Updates are signed and checked before they install, and
+never touch your saves, settings or game files. Pick **Stable** (tested) or
+**Beta** (newest fixes first) under **Updates**.
+
+**Where your files are:** `%LOCALAPPDATA%\ProjectSparrow-Data` holds your saves,
+settings, logs and the game files. **Help → Change data folder** moves it, for
+example to a bigger drive. Uninstalling Project Sparrow leaves this folder alone,
+so delete it yourself if you want the space back.
+
+**Prefer a portable copy?** Each release also has `ProjectSparrow-stable-Portable.zip`:
+unzip it anywhere and run `Fable2Launcher.exe`. Portable copies don't update
+themselves.
 
 **Need help?** Ask on the [Discord](https://discord.gg/8TQUZpPNeR). To compile the game yourself, see [Building](#building).
 
@@ -54,29 +74,15 @@ Original GOTY USA/Europe and German GOTY dumps are supported by the default
 
 ## Windows launcher
 
-The optional WPF launcher detects the original game edition and configures
-output resolution, internal render scale, anisotropic filtering, FXAA, VSync,
-window/fullscreen mode, and separate 30/60/120/144/165/240/unlimited FPS limits for the game
-and for presenting to the display. It keeps its preferences
-in `launcher-settings.toml` and writes `fable_2.toml`, preserving other settings
-and a one-time backup. Preferences survive the runtime rewriting its config.
-It can also extract the game straight from a disc image: the **Extract from
-ISO** button opens a raw `.iso`, pulls out just `default.xex` first, checks its
-SHA-256 against the supported-version list, and only once it matches does it
-extract the rest of the disc (`default.xex` and `data/`) into the launcher's own
-folder, with a live progress screen and a Stop button. It reads Xbox 360 GDFX
-discs with the shared [X360Extract](tools/x360extract/) library, so its output
-matches the `x360extract` tool byte for byte — making the launcher the simplest
-way to get the game files in place, with no separate extractor tool.
-
-Packaged releases check GitHub for a newer release when the launcher opens and
-show a button that opens its page. Local builds don't check, and a failed check
-is ignored.
-
-The game-folder selection defaults to the launcher's own folder on first launch
-and then remembers the user's saved location. Game files can live separately;
-the launcher uses `--game_data_root`. Both applications are named Fable 2
-Recompiled and use new project-owned icons.
+**Project Sparrow** (`launcher/`) installs, updates and starts the game. It
+copies the game from your own disc image (checking `default.xex` against the
+supported versions first), offers Original, Enhanced and Experimental editions
+plus individual display and control settings, has Night, Dusk and Day themes,
+and bundles logs for bug reports. Player files live in a data folder outside the
+install, so updates can replace the program safely. Updates come from this
+fork's GitHub Releases through [Velopack](https://velopack.io), on a Stable or
+Beta channel, and every package is signed. Details:
+[launcher/README.md](launcher/README.md).
 
 
 # There is now a discord!
@@ -90,8 +96,8 @@ https://discord.gg/8TQUZpPNeR
 - **How to extract (built-in, recommended):** the launcher has an **Extract from ISO** button. Click **Extract from ISO** and pick your disc image (`.iso`). It first checks the iso against the supported-version list, and only once that matches does it extract disc (`default.xex` and `data/`) into the launcher's own folder. No separate tool is required.
 - **How to extract (external GUI tool):** alternatively, rip the disc to an ISO and open it with **[XboxImageExtractor](https://github.com/dromex1/XboxImageExtractor)** — a GUI tool for Xbox 360 game images. It lists the image's filesystem; select `default.xex` and `data` and extract them into the project root (`data` extract as folders).
 - **You must supply the game content yourself** (it is not in the repo): rip the Fable 2 GOTY (USA/EU) disc (see the hashes in [German GOTY support](docs/GERMAN_GOTY_SUPPORT.md)) and put `default.xex` and `data/` in the project root. The build does not copy this into the build directories   
-- **Saves live in `<build dir>\saves\`** — back that folder up to keep your progress, and copy it between build trees (Debug/Release) or machines to carry a save over.
-- The `--game_data_root <path>` override still points the content root at a different tree (e.g. to run from a shared content copy without staging); saves/cache still land next to the exe.
+- **Saves live in `<data folder>\saves\`**: `%LOCALAPPDATA%\ProjectSparrow-Data\saves\` for an installed copy, or `<build dir>\saves\` when you run a build directly without `--user_root`. Back that folder up to keep your progress, and copy it between folders or machines to carry a save over.
+- The `--game_data_root <path>` override still points the content root at a different tree (e.g. to run from a shared content copy without staging); saves/cache/logs/config still land next to the exe unless `--user_root` is given.
 - Although this was made for the US / Europe GOTY version I have been able to run the following regions: Germany, France, Italy, Russia, and Spain. Your milage may very if you use those regions.
 
 
@@ -109,6 +115,7 @@ Optional command-line overrides (all normal `--cvar value` args):
 | Argument | Effect |
 |---|---|
 | `--game_data_root <path>` | Use a different content directory (beats the exe-dir-only search) |
+| `--user_root <path>` | Folder for `saves/`, `cache/`, `logs/`, `fable_2.toml` and `fable2_config.toml` (default: next to the exe). Used by the installed build so updates never touch player data |
 | `--update_data_root <path>` | Optional update content root |
 | `--window_width` / `--window_height` / `--fullscreen` | Presentation options |
 | `--keyboard_gamepad_map <map>` | Host keyboard -> guest gamepad button map (see below) |
@@ -477,7 +484,7 @@ hardcoded paths**. Prerequisites (all standard tools):
 - **LLVM** (clang/clang++/lld) — on PATH or the default `C:\Program Files\LLVM` install
 - **Ninja** (on PATH, `%USERPROFILE%\bin`, or the WinGet package dir)
 - **Internet** on first build — `build.cmd` fetches the
-  [SDK fork](https://github.com/himdo/rexglue-sdk) and its submodules, then builds the
+  [SDK fork](https://github.com/gitgudscrub/rexglue-sdk) and its submodules, then builds the
   SDK, including the `rexglue` codegen tool, under `out\`. Later builds don't rebuild it.
 - **Python and Git** for code generation and source-SDK preparation, plus the
   `pefile` package (`pip install pefile`) for the post-build PE cleaning; **Visual
@@ -490,22 +497,16 @@ build.cmd <target>      # any other CMake target
 build.cmd -release [t]  # build as Release (-O3) instead of Debug (-r is short form)
 ```
 
-Both Debug and Release build the pinned, patched SDK from source, and a first Debug
+Both Debug and Release build the SDK from source — the
+[project's fork](https://github.com/gitgudscrub/rexglue-sdk) (branch `fable2`),
+pinned as the `thirdparty/rexglue-sdk` submodule. That submodule is the only SDK
+source the project uses; there are no SDK patch files to apply. A first Debug
 build also builds the Release SDK because only that one ships the codegen tool; see
 [runtime build requirements](docs/RUNTIME_FIXES.md). Game content is required
 for code generation but is never published with this repository.
 
-Manual/advanced setup (normally not needed):
-
-```
-tools\setup_sdk_src.cmd  # fetch the SDK SOURCE for the Vulkan plugin: clones
-                         # rexglue/rexglue-sdk at the pinned commit
-                         # (f5337cdc), pins its submodules to the SHAs in
-                         # thirdparty/rexglue-sdk-submodule-pins.txt, and
-                         # applies thirdparty/rexglue-sdk-local.patch. LONG
-                         # (several GB).
-git                     # only needed for setup_sdk_src.cmd
-```
+If the submodule is missing (e.g. a non-recursive clone), fetch it with
+`git submodule update --init --recursive`.
 
 The build also accepts explicit overrides if you keep the SDK elsewhere:
 `cmake -DREXGLUE_SDK_ROOT=<staged SDK root> -DREXGLUE_SDK_SOURCE=<SDK source>`
@@ -524,6 +525,11 @@ The build also accepts explicit overrides if you keep the SDK elsewhere:
 
 ## Packaging a release
 
+Installer releases (Velopack, signed, auto-updating) are described step by step
+in [docs/RELEASING.md](docs/RELEASING.md).
+
+The older portable zip still works:
+
 ```
 build.cmd package
 ```
@@ -536,11 +542,10 @@ in `tools/package_release.py` are packaged, so game files, saves and logs stay o
 ## Vulkan renderer
 
 The goal is a Vulkan rendering path for the game (the SDK's Windows GPU plugin only ships a
-D3D12 Xenos backend; the SDK's own Vulkan backend lives in `rexglue-sdk-src/src/graphics/vulkan/`
-but is not compiled into the shipped plugin). Per the project constraint, all Vulkan work lives in
-this repo. The SDK source itself is built from [the project's fork](https://github.com/himdo/rexglue-sdk)
-**plus this project's tracked local patch** (`thirdparty/rexglue-sdk-local.patch` —
-see below).
+D3D12 Xenos backend; the SDK's own Vulkan backend lives in `thirdparty/rexglue-sdk/src/graphics/vulkan/`
+but is not compiled into the shipped plugin). The SDK source is [the project's fork](https://github.com/gitgudscrub/rexglue-sdk)
+(branch `fable2`, based on [himdo/rexglue-sdk](https://github.com/himdo/rexglue-sdk)) —
+the same `thirdparty/rexglue-sdk` submodule the game itself builds from.
 
 **Stage 1 — foundation (DONE, verified).** A self-contained Vulkan pipeline that creates a window,
 inits Vulkan, and presents a clear color, proving the whole stack on a real GPU:
@@ -569,43 +574,40 @@ Key implementation notes (hard-won):
 
 **Stage 2 — render the game via Vulkan (in progress).** The SDK's Vulkan backend is a complete,
 ~1.4 MB renderer compiled into `rexgpu-xenos` only when `REXGLUE_USE_VULKAN=ON` (OFF by default on
-Windows). Rather than re-implementing it, we build the SDK source **plus the
-project's local patch** (`thirdparty/rexglue-sdk-local.patch`) into a Vulkan GPU
+Windows). Rather than re-implementing it, we build the SDK fork into a Vulkan GPU
 plugin and load it via the `gpu_plugin` mechanism, so the renderer can be **swapped at launch, no
 rebuild of the game**:
 
 ```
-tools\build_sdk_vulkan.cmd     # builds the SDK source with REXGLUE_USE_VULKAN=ON
-                               # (auto-fetches it first via tools\setup_sdk_src.cmd:
-                               # clone at the pinned commit + submodule pins +
-                               # thirdparty\rexglue-sdk-local.patch, into
-                               # thirdparty\rexglue-sdk-src) -> the plugin lands
-                               # in <SDK source>\out\win-amd64\Release\rexgpu-xenos.dll
+tools\build_sdk_vulkan.cmd     # builds thirdparty\rexglue-sdk with REXGLUE_USE_VULKAN=ON
+                               # -> the plugin lands in
+                               # thirdparty\rexglue-sdk\out\win-amd64\Release\rexgpu-xenos.dll
 ```
 
-The SDK source is the stock `rexglue/rexglue-sdk` repo **plus this project's
-local modifications** (`thirdparty/rexglue-sdk-local.patch`: the main-menu
-crash fix in `exception_handler_win.cpp` + `xmemory.cpp`, and the Vulkan/
-FPS instrumentation — see `docs/main_menu_crash_fix.md` and the patch
-header). `tools/setup_sdk_src.cmd` reproduces that exact tree from the
-tracked patch + submodule pins, so the source never has to live outside
-this repo.
+Because the plugin is built from the same submodule as the game, it carries the
+same SDK fixes as the D3D12 build. SDK changes go on the fork's `fable2` branch
+and are picked up by bumping the submodule.
 
-Two plugins are staged next to the exe, selected by the `gpu_plugin` argument:
+Once the Vulkan SDK is built, a Release build stages both plugins next to the exe, plus
+`fable2.cmd`, which puts the matching runtime in place and passes the right `gpu_plugin`:
 
 ```
-out\build\win-amd64-release\fable_2.exe --gpu_plugin=xenos           # D3D12 (default)
-out\build\win-amd64-release\fable_2.exe --gpu_plugin=xenos-vulkan    # Vulkan (source-built plugin)
+out\build\win-amd64-release\fable2.cmd           # D3D12 (default)
+out\build\win-amd64-release\fable2.cmd vulkan    # Vulkan
 ```
 
-- `rexgpu-xenos.dll` is the D3D12 plugin, built from the patched SDK source.
+The Vulkan plugin imports symbols the normal D3D12-only `rexruntime.dll` lacks, so
+`fable2.cmd vulkan` copies `rexruntime-vulkan.dll` over it; plain `fable2.cmd` restores the
+build's own runtime from `rexruntime-d3d12.dll`.
+
+- `rexgpu-xenos.dll` is the D3D12 plugin, built from the SDK fork.
 - `rexgpu-xenos-vulkan.dll` is the source-built plugin (staged by CMake from the SDK build tree,
   Release-only). `Fable2App::OnPreSetup` loads it with `LoadGpuPlugin("xenos-vulkan", "vulkan")`,
   forcing the Vulkan backend (the plugin is compiled with both; the default `"any"` would pick D3D12).
 - The source plugin must match the game's runtime: the Release source plugin imports `rexruntime.dll`,
   so it is staged for the Release game only (the Debug game links `rexruntimed.dll`).
-- The SDK source location is resolved relative to this repo (`thirdparty/rexglue-sdk-src`,
-  or a sibling `..\rexglue-sdk-src` for pre-existing setups) and can be overridden with
+- The SDK source location is resolved relative to this repo (`thirdparty/rexglue-sdk`,
+  or a sibling `..\rexglue-sdk` for pre-existing setups) and can be overridden with
   `-DREXGLUE_SDK_SOURCE=<path>`.
 
 ## Manifest highlights (fable_2_manifest.toml)

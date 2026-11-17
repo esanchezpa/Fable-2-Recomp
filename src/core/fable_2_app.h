@@ -35,6 +35,7 @@
 #include "fable2_keycap_swap.h"
 #include "fable2_patches.h"
 #include "keyboard_prompts.h"
+#include "fable2_texture_pack.h"
 // #include "fable2_deadbeef_overlay.h"
 // 30fps-cap instrumentation (writes fps_probe.log next to the exe). Disabled
 // now that the cap is lifted via REX_VSYNC=0 (see tools/fable2-uncapped.cmd).
@@ -59,6 +60,7 @@ void record_a_press(std::int64_t ms);
 #endif  // FABLE2_REMOTE_CONTROL
 #include "xex_verify.h"
 #include "game_branding.h"
+#include "shader_prebuild.h"
 
 namespace {
 // The `screenshot` command reads the game's rendered frame from the renderer's
@@ -77,6 +79,29 @@ rex::ui::Presenter* GetWindowPresenter(rex::ui::Window* w) {
            : nullptr;
 }
 }  // namespace
+
+// Per-user writable root: saves/, cache/, logs/, fable_2.toml and
+// fable2_config.toml. Empty = the exe's own folder (portable/dev layout).
+// The installed build passes it so updates, which replace the install folder,
+// never touch player data. Command line only: fable_2.toml lives inside it.
+REXCVAR_DEFINE_STRING(user_root, "", "Runtime",
+                      "Folder for saves, cache, logs and config files "
+                      "(empty = next to fable_2.exe)");
+
+namespace fable2 {
+// Absolute user root, created if missing. Stable for the whole run.
+inline const std::filesystem::path& UserRoot() {
+  static const std::filesystem::path root = [] {
+    std::filesystem::path p = std::string(REXCVAR_GET(user_root));
+    if (p.empty()) p = rex::filesystem::GetExecutableFolder();
+    std::error_code ec;
+    p = std::filesystem::absolute(p, ec);
+    std::filesystem::create_directories(p, ec);
+    return p;
+  }();
+  return root;
+}
+}  // namespace fable2
 
 class Fable2App : public rex::ReXApp {
  public:
@@ -104,7 +129,7 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
 
   // Emulate the Xbox 360 Xenos GPU. Two plugins are staged next to the exe:
-  //   rexgpu-xenos[d].dll        -> D3D12 (prebuilt SDK plugin; the default)
+  //   rexgpu-xenos[d].dll        -> D3D12 (built with the game; the default)
   //   rexgpu-xenos-vulkan[d].dll -> Vulkan (built from the SDK source via
   //                                   tools/build_sdk_vulkan.cmd)
   // Swap the renderer at launch with --gpu_plugin, no rebuild required:
@@ -120,7 +145,7 @@ class Fable2App : public rex::ReXApp {
       config.graphics = rex::system::LoadGpuPlugin("xenos-vulkan", "vulkan");
     }
     // Otherwise leave config.graphics null so ReXApp loads
-    // LoadGpuPlugin("xenos") -> the prebuilt D3D12 plugin.
+    // LoadGpuPlugin("xenos") -> the D3D12 plugin.
 
     // Build on top of the default input system (SDL gamepad + NOP) and add a
     // synthetic "keyboard gamepad" driver so host keys/mouse buttons can drive
@@ -137,6 +162,13 @@ class Fable2App : public rex::ReXApp {
       system->AddDriver(std::make_unique<fable2::remote::GamepadDriver>(
           system->window(), 0, &fable2::console::PadStore(),
           &fable2::console::PadEnabled(), rex::input::DeviceId{1ull << 62}));
+      // `pad p2|p3|p4 ...`: console pads pinned to guest users 1-3 (local
+      // co-op tests; later the network feeds remote players' input here).
+      for (int u = 1; u < 4; ++u)
+        system->AddDriver(std::make_unique<fable2::remote::GamepadDriver>(
+            system->window(), 0, &fable2::console::PadStoreN(u),
+            &fable2::console::PadEnabled(),
+            rex::input::DeviceId{(1ull << 62) + static_cast<uint64_t>(u)}, u));
 #ifdef FABLE2_REMOTE_CONTROL
       // Remote (AI) pad: driven over localhost TCP by an external harness
       // (src/input/remote_control_server.h). OR-merges with the pads above; not
@@ -239,6 +271,8 @@ class Fable2App : public rex::ReXApp {
                                   fable2::config::Get().gpu_frame_sync ? "true" : "false")) {
       REXSYS_WARN("[fable2-config] gpu_sync_at_frame_start cvar missing (SDK without it?)");
     }
+    // [graphics] texture pack cvars live in the GPU plugin too.
+    fable2::texturepack::SeedCvars(fable2::UserRoot());
     // The fast memexport readback hands the guest the previous draw's output, so
     // moving geometry uses stale data and flickers. With both shaders on the CPU
     // nothing is left to read back in testing, so the exact path costs nothing.
@@ -376,9 +410,7 @@ class Fable2App : public rex::ReXApp {
     // This describes the linked build, not a guarantee about DLLs replaced later.
     REXSYS_INFO("[native-build] configuration={} linked_sdk={}",
                 FABLE2_NATIVE_CONFIGURATION, FABLE2_NATIVE_SDK);
-    const std::filesystem::path exe_dir =
-        rex::filesystem::GetExecutableFolder();
-    fable2::config::Load(exe_dir / "fable2_config.toml");
+    fable2::config::Load(fable2::UserRoot() / "fable2_config.toml");
 
     // Seed cvars from the config. Only when the cvar is still at its
     // compiled default (source kDefault), so higher-priority sources --
@@ -460,6 +492,15 @@ class Fable2App : public rex::ReXApp {
   // decrypted default.xex into the guest arena, before the module launches.
   // Each patch is switched on by a [patches] key in fable2_config.toml
   // (loaded earlier, in OnPostInitLogging).
+  // Fills the shader cache from the pre-build list just before the SDK loads it
+  // (it does so right after this), so known pipelines are built at boot instead
+  // of stuttering in game. The xex image is loaded, for its built-in shaders.
+  void OnPreLaunchModule() override {
+    fable2::shaderprebuild::MergeIntoCache(
+        rex::filesystem::GetExecutableFolder() / "shader_prebuild.txt", game_data_root(),
+        cache_root(), runtime()->memory());
+  }
+
   void OnPostLoadXexImage() override {
     fable2::patches::ApplyAll(runtime()->memory(), PPCImageConfig);
     // Lets the address-scan hook (src/core/fable2_address_scan.cpp) read the
@@ -578,14 +619,15 @@ class Fable2App : public rex::ReXApp {
     }
   }
 
-  // Self-contained layout: everything lives next to the executable.
+  // Self-contained layout: by default everything lives next to the executable.
   //   <exe>/               <- content root (default.xex, data/, nxeart/,
   //                           $SystemUpdate/; staged next to the exe by the
   //                           build, see CMakeLists.txt)
-  //   <exe>/saves/         <- user data: save files, settings, profiles
-  //   <exe>/cache/         <- runtime caches (shader cache, etc.)
-  //   <exe>/fable_2.toml   <- cvar config (SDK default)
-  //   <exe>/logs/          <- game logs (SDK default)
+  //   <user>/saves/        <- user data: save files, settings, profiles
+  //   <user>/cache/        <- runtime caches (shader cache, etc.)
+  //   <user>/fable_2.toml  <- cvar config
+  //   <user>/logs/         <- game logs (OnConfigureLogging)
+  // <user> is --user_root, or the exe folder when it is not given.
   // The content root is the exe's own directory ONLY (no ancestor walk), so
   // the whole build folder is portable as-is: copy it anywhere and it runs.
   // Override the content location with --game_data_root=<path>.
@@ -625,16 +667,18 @@ class Fable2App : public rex::ReXApp {
       std::exit(1);
     }
 
-    // Keep saves and caches inside the exe's own folder (self-contained).
-    // The SDK's default user dir is a per-user platform location, which
-    // caused save corruption. NOTE: set unconditionally because the SDK
-    // defaults are non-empty, so empty-checks would never trigger (this
-    // also overrides the cvar/CLI defaults).
+    // Keep saves and caches under the user root (exe folder by default).
+    // The SDK's default user dir is Documents, which caused save corruption.
+    // NOTE: set unconditionally because the SDK defaults are non-empty, so
+    // empty-checks would never trigger (this also overrides the SDK's
+    // --user_data_root / --cache_root; use --user_root instead).
+    const std::filesystem::path& user_root = fable2::UserRoot();
     std::error_code ec;
-    paths.user_data_root = exe_dir / "saves";
+    paths.user_data_root = user_root / "saves";
     std::filesystem::create_directories(paths.user_data_root, ec);
-    paths.cache_root = exe_dir / "cache";
+    paths.cache_root = user_root / "cache";
     std::filesystem::create_directories(paths.cache_root, ec);
+    paths.config_path = user_root / "fable_2.toml";
 
     // Mount the $SystemUpdate folder (inside the content root) as update:\
     // so VdSetGraphicsInterruptCallback-era update partition lookups resolve
@@ -646,6 +690,10 @@ class Fable2App : public rex::ReXApp {
       }
     }
   }
+  void OnConfigureLogging(rex::LogConfig& config) override {
+    config.log_dir = fable2::UserRoot() / "logs";
+  }
+
   std::filesystem::path XexHashMarker() {
     std::filesystem::path cache = cache_root();
     if (cache.empty()) cache = game_data_root() / "cache";

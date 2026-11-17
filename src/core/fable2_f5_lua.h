@@ -9,17 +9,23 @@
 //   A) poll_f5() is called per frame from the host input poll; it edge-detects
 //      F5 and latches a flag (g_f5_pending).
 //   B) poll_mainloop() is called per frame from the MainRenderLoop hook; when
-//      the flag is latched it calls run_external().
-//   C) run_external() builds a game (refcounted) string for the path in guest
-//      memory and calls the captured CScriptManager::RunScript method.
+//      the flag is latched it queues the run (request_run()).
+//   C) run_pending() runs queued scripts on the GAME thread, from the idle
+//      point of its fixed-step loop (ProcessGameFrame_82276C30, between
+//      simulation steps, outside the game's own Lua). run_external() builds a
+//      game (refcounted) string for the path in guest memory and calls the
+//      captured CScriptManager::RunScript method.
 //   D) The dispatcher probe (LuaBind_RunScript_82806168) captures the
 //      (this, method) of the RunScript callable: the binding dispatches to a
 //      member fn, so the wrapper holds (this=instance, method=fn). We pin the
 //      (this, method) whose string argument ends in ".lua".
 //
-// The RunScript binding and the MainRenderLoop hook both run on the guest main
-// thread (the thread that drives the in-game Lua VM), so replaying the run is
-// thread-safe.
+// Threading: MainRenderLoop runs on the RENDER thread, not the thread that
+// drives the game's Lua VM. Calling RunScript from it ran Lua on two threads at
+// once (Lua 5.1 is not thread-safe) and corrupted the VM: intermittent crashes
+// after the New Game movie (null or stale objects in bound-method thunks and
+// __gc, longjmps to a jmp_buf set on the other thread). So every run goes
+// through request_run() and executes on the game thread.
 
 #pragma once
 
@@ -31,6 +37,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "rex/cvar.h"
 #include "rex/ppc/context.h"  // PPCContext
@@ -99,6 +106,11 @@ inline std::atomic<uint32_t> g_run_count{0};
 // Latched by the per-frame F5 poll; consumed by poll_mainloop.
 inline std::atomic<bool> g_f5_pending{false};
 inline bool g_f5_down_prev = false;
+
+// Scripts waiting to run on the game thread (see run_pending()).
+inline std::mutex g_run_mu;
+inline std::vector<std::string> g_run_queue;
+inline std::atomic<bool> g_run_any{false};
 
 inline std::mutex& log_mtx() { static std::mutex m; return m; }
 inline std::FILE* logf() {
@@ -243,23 +255,48 @@ inline bool run_external(PPCContext& ctx, uint8_t* base, const std::string* path
   return true;
 }
 
-// Per-frame entry point. Called from the MainRenderLoop_82B9CD68 hook (in
-// fps_meter.h). Runs the external file when F5 is latched. This makes F5
-// responsive (fires on the very next frame).
-inline void poll_mainloop(PPCContext& ctx, uint8_t* base) {
-  if (!g_f5_pending.exchange(false)) return;
-  // run_external calls guest functions (ConstructRefCounted, the RunScript
-  // method, DestructRefCounted) which clobber the PPC registers. Save the whole
-  // context and restore it so the real MainRenderLoop sees the state it had
-  // when the hook fired (only F5 detection should be side-effectful).
-  logline("[f5] poll_mainloop: r1=0x%08X r2=0x%08X r3=0x%08X (about to run_external)\n",
-          (uint32_t)ctx.r1.u64, (uint32_t)ctx.r2.u64, (uint32_t)ctx.r3.u64);
-  const PPCContext saved = ctx;
-  try {
-    run_external(ctx, base);
-  } catch (...) {
+// Queue a script to run on the game thread. Any thread. An empty path means
+// the F5 file (cvar f5_lua_path).
+inline void request_run(const std::string& path) {
+  std::lock_guard<std::mutex> lock(g_run_mu);
+  g_run_queue.push_back(path);
+  g_run_any.store(true, std::memory_order_release);
+}
+
+// Game thread only: runs the queued scripts. Called from the idle point of
+// ProcessGameFrame_82276C30's fixed-step loop (between simulation steps, so
+// the game's own Lua is not running).
+inline void run_pending(PPCContext& ctx, uint8_t* base) {
+  if (!g_run_any.load(std::memory_order_acquire)) return;
+  std::vector<std::string> paths;
+  {
+    std::lock_guard<std::mutex> lock(g_run_mu);
+    paths.swap(g_run_queue);
+    g_run_any.store(false, std::memory_order_relaxed);
   }
-  ctx = saved;
+  for (const std::string& path : paths) {
+    // run_external calls guest functions (ConstructRefCounted, the RunScript
+    // method, DestructRefCounted) which clobber the PPC registers. Save the
+    // whole context and restore it so the frame loop sees the state it had.
+    logline("[f5] run_pending: %s on the game thread (r1=0x%08X)\n",
+            path.empty() ? "<F5 file>" : path.c_str(), (uint32_t)ctx.r1.u64);
+    const PPCContext saved = ctx;
+    try {
+      run_external(ctx, base, path.empty() ? nullptr : &path);
+    } catch (...) {
+    }
+    ctx = saved;
+  }
+}
+
+// Per-frame entry point. Called from the MainRenderLoop_82B9CD68 hook (in
+// fps_meter.h, render thread). Queues the F5 file when F5 is latched; the game
+// thread runs it at its next idle point (see run_pending()).
+inline void poll_mainloop(PPCContext& ctx, uint8_t* base) {
+  (void)ctx;
+  (void)base;
+  if (!g_f5_pending.exchange(false)) return;
+  request_run(std::string());
 }
 
 }  // namespace fable2::f5lua

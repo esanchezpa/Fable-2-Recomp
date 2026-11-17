@@ -1,8 +1,8 @@
 // fable_2 - ReXGlue Recompiled Project
 //
 // Recomp user configuration (fable2_config.toml), separate from the ReXGlue
-// SDK cvar config (fable_2.toml). Loaded once at startup from next to the
-// exe; created with defaults if missing.
+// SDK cvar config (fable_2.toml). Loaded once at startup from the user
+// root (--user_root, default next to the exe); created with defaults if missing.
 
 #pragma once
 
@@ -215,9 +215,63 @@ struct Values {
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
   int32_t hotfunc_yield_every = 1;
+  // [perf] game_loop_sleep: when the game thread's fixed-step loop has no
+  // tick due yet, sleep until just before the next one instead of spinning
+  // on NtYieldExecution (see ProcessGameFrame_82276C30.cpp).
+  bool game_loop_sleep = true;
+  // [perf] frame_limiter_sleep: the render thread's frame limiter blocks on
+  // the GPU progress counter instead of spinning (see
+  // FrameLimiterWait_82242628.cpp; needs the SDK's EVENT_WRITE_SHD wake).
+  bool frame_limiter_sleep = true;
+  // [perf] performance_log: write logs/perf_<date>.log (fps per 10 s, slowest
+  // 1%, hitches); see src/diagnostics/perf_log.h.
+  bool performance_log = true;
   // [perf] refresh_gpu_memory_each_frame: false seeds the SDK cvar
   // clear_memory_page_state off (see the config file).
   bool refresh_gpu_memory_each_frame = false;
+  // [graphics] texture_pack: seeds the SDK cvar texture_replacement (true =
+  // replacement textures from <user root>/textures/replace are shown).
+  bool texture_pack = true;
+  // [graphics] texture_pack_toggle_key: switches texture_replacement in game
+  // (src/core/fable2_texture_pack.h). Empty = no key.
+  std::string texture_pack_toggle_key = "F8";
+  // [graphics] texture_dump: seeds the SDK cvar texture_dump.
+  bool texture_dump = false;
+  // [graphics] draw_distance / character_draw_distance: guest draw-distance
+  // multipliers (static + animated entities / villagers + creatures), written
+  // as data patches at image load (src/core/fable2_patches.cpp).
+  float draw_distance = 3.0f;
+  // [graphics] texture_filtering: anisotropic level (0/2/4/8/16) seeded into
+  // the SDK cvar anisotropic_override while Modern graphics are on.
+  int32_t texture_filtering = 16;
+  // [graphics] post_processing: seeds the SDK cvar post_grade while Modern
+  // graphics are on (colour grade after the gamma ramp, D3D12 only).
+  bool post_processing = true;
+  // [graphics] ambient_occlusion: seeds the SDK cvar post_ao (AO from the
+  // scene depth, applied by the colour grade, so it follows post_grade).
+  bool ambient_occlusion = true;
+  // [graphics] sun_shadows: seeds the SDK cvar post_sun_shadows (screen-space
+  // sun shadows inside the AO pass, so it follows post_ao).
+  bool sun_shadows = true;
+  // [graphics] sun_shadow_map: seeds the SDK cvar post_sun_map (the depth
+  // pre-pass redrawn from the sun; needs sun_shadows).
+  bool sun_shadow_map = true;
+  // [graphics] ultra: the Sparrow Edition tier. Seeds heavier SDK settings on
+  // top of the ones above (light shafts, a sharper and wider sun shadow map
+  // redrawn every frame, stronger AO); see fable2_texture_pack.h.
+  bool ultra = false;
+  // [graphics] sparrow_renderer: Project Sparrow. Seeds the SDK cvar
+  // sparrow_renderer and loads shaders/sparrow_replace instead of
+  // shaders/replace (startup only).
+  bool sparrow_renderer = false;
+  // [graphics] anti_aliasing / bloom: seed the SDK cvars post_aa / post_bloom
+  // (both run inside the colour grade, so they follow post_grade too).
+  bool anti_aliasing = true;
+  bool bloom = false;
+  // [graphics] shader_rewrites: seeds the SDK cvar shader_replace_dir with
+  // shaders/replace (startup only; replacements are applied at translation).
+  bool shader_rewrites = true;
+  float character_draw_distance = 1.0f;
 };
 
 // Load the config from `path`.

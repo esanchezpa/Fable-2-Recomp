@@ -1,0 +1,508 @@
+// Project Sparrow: frame data and the real sun shadow map for the material
+// shaders, built with /D SPARROW=1 (tools/shaders/build_replace.py writes
+// them to shaders/sparrow_replace; only the Sparrow edition loads that).
+//
+// The SDK (cvar sparrow_renderer) copies its sun shadow map (post_sun_map)
+// into an R32_FLOAT texture at a fixed index of the bindless 2D table after
+// the game's depth pre-pass, before the colour pass (sparrow_sun.cs.hlsl in
+// the SDK):
+//   rows 0 .. size-1  depth along the sun, reversed (larger = nearer the
+//                     sun, 0 = nothing drawn there);
+//   rows size ..      the ground ambient grid, size / 8 rows
+//                     (sparrow_ambient.cs.hlsl; SparrowGroundAmbient);
+//   last row          frame data: 0-2 map centre, 3 signed half width
+//                     (negative: up axis flipped), 4 half depth, 5 size,
+//                     6 valid, 7 bias texels, 8-10 direction toward the
+//                     sun, 11 frame counter, 12 debug mode (SDK cvar
+//                     sparrow_debug: 1 = no sun wherever the map covers),
+//                     13 grid written this frame.
+// Include after xe_common.hlsli.
+
+#ifndef SPARROW_COMMON_HLSLI
+#define SPARROW_COMMON_HLSLI
+
+#define SPARROW_SUN_INDEX 3
+
+// Map height in texels plus the frame row; 0 when the slot is still null.
+uint SparrowSunRows() {
+  uint w, h, n;
+  xe_textures_2d[SPARROW_SUN_INDEX].GetDimensions(w, h, n);
+  return h;
+}
+
+float SparrowMap(int2 p) {
+  return xe_textures_2d[SPARROW_SUN_INDEX].Load(int4(p, 0, 0)).x;
+}
+
+// Whether the SDK handed over a map this frame (sparrow_renderer on, map
+// drawn): the Sparrow-only lighting additions follow it, so with the cvar
+// off the ports render exactly as the game's own shaders.
+// sparrow_debug (SDK cvar): 0 off, 1 no sun where the map covers, 2 only
+// the light the Sparrow materials add.
+int SparrowDebug() {
+  uint rows = SparrowSunRows();
+  return rows >= 2u ? int(SparrowMap(int2(12, int(rows) - 1)) + 0.5) : 0;
+}
+
+bool SparrowActive() {
+  uint rows = SparrowSunRows();
+  return rows >= 2u && SparrowMap(int2(6, int(rows) - 1)) > 0.5;
+}
+
+// Sun visibility at a world position (1 lit, 0 shadowed, 3x3 PCF), or -1
+// when the map is off or the point lies outside it: the caller then keeps
+// the game's own shadow. n is the surface normal (for the normal offset);
+// pass 0 for leaves, bark and ferns (no usable normal): the point then steps
+// toward the sun instead.
+float SparrowSunShadow(float3 pos, float3 n) {
+  uint rows = SparrowSunRows();
+  if (rows < 2u) return -1.0;
+  int frame_row = int(rows) - 1;
+  if (SparrowMap(int2(6, frame_row)) < 0.5) return -1.0;
+  float3 centre = float3(SparrowMap(int2(0, frame_row)), SparrowMap(int2(1, frame_row)),
+                         SparrowMap(int2(2, frame_row)));
+  float signed_radius = SparrowMap(int2(3, frame_row));
+  float depth_half = SparrowMap(int2(4, frame_row));
+  float size = SparrowMap(int2(5, frame_row));
+  float bias_texels = SparrowMap(int2(7, frame_row));
+  float3 l = float3(SparrowMap(int2(8, frame_row)), SparrowMap(int2(9, frame_row)),
+                    SparrowMap(int2(10, frame_row)));
+  float radius = abs(signed_radius);
+  if (radius <= 0.0 || depth_half <= 0.0 || size < 1.0) return -1.0;
+  // The basis the SDK drew the map with (SetupSunMapFrame / post_ao.cs.hlsl).
+  float3 ref = abs(l.x) < 0.9 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
+  float3 right = normalize(cross(ref, l));
+  float3 up = cross(l, right);
+  if (signed_radius < 0.0) up = -up;
+  float texel = 2.0 * radius / size;
+  if (dot(n, n) < 0.25) n = l;
+  float ndl = dot(n, l);
+  // Facing away: no direct sun on the game's own terms either (skin wraps
+  // past the terminator), so leave it to the game.
+  if (ndl <= 0.0) return -1.0;
+  // Normal offset, more of it at grazing angles where acne starts.
+  float3 v = pos + n * (texel * bias_texels * (1.0 + 2.0 * (1.0 - ndl))) - centre;
+  float x = dot(right, v) / radius, y = dot(up, v) / radius;
+  float z = dot(l, v) / (2.0 * depth_half) + 0.5;
+  float edge = max(abs(x), abs(y));
+  if (edge >= 1.0 || z >= 1.0 || z <= 0.0) return -1.0;
+  float2 uv = float2(x * 0.5 + 0.5, 0.5 - y * 0.5) * size - 0.5;
+  float z_bias = texel * bias_texels / (2.0 * depth_half);
+  int2 base = int2(floor(uv));
+  float2 f = uv - float2(base);
+  int max_texel = int(size) - 1;
+  float lit[4][4];
+  [unroll] for (int j = 0; j < 4; ++j) {
+    [unroll] for (int i = 0; i < 4; ++i) {
+      int2 q = clamp(base + int2(i - 1, j - 1), int2(0, 0), int2(max_texel, max_texel));
+      lit[j][i] = SparrowMap(q) > z + z_bias ? 0.0 : 1.0;
+    }
+  }
+  float sum = 0.0;
+  [unroll] for (int j2 = 0; j2 < 3; ++j2) {
+    [unroll] for (int i2 = 0; i2 < 3; ++i2) {
+      float top = lerp(lit[j2][i2], lit[j2][i2 + 1], f.x);
+      float bottom = lerp(lit[j2 + 1][i2], lit[j2 + 1][i2 + 1], f.x);
+      sum += lerp(top, bottom, f.y);
+    }
+  }
+  if (abs(SparrowMap(int2(12, frame_row)) - 1.0) < 0.5) return 0.0;
+  return sum / 9.0;
+}
+
+// The game's shadow value combined with the map's where the map covers the
+// point: shadowed if either says so (the game's cascade holds casters off
+// screen; ours reaches much further).
+float SparrowSunOr(float game_shadow, float3 pos, float3 n) {
+  float s = SparrowSunShadow(pos, n);
+  return s < 0.0 ? game_shadow : min(game_shadow, s);
+}
+
+// No surface normal: leaves, bark, ferns.
+float SparrowSunOrVolume(float game_shadow, float3 pos) {
+  return SparrowSunOr(game_shadow, pos, float3(0.0, 0.0, 0.0));
+}
+
+// --- Physically based lighting ----------------------------------------------
+// The game lights with Lambert diffuse in its own units (albedo * light, no
+// 1/pi), so a specular lobe in the same units is pi * BRDF_spec. GGX normal
+// distribution, Smith height-correlated visibility, Schlick Fresnel.
+#ifndef SPARROW_F0
+#define SPARROW_F0 0.04        // dielectric: stone, earth, wood, plaster
+#endif
+
+float SparrowFresnel(float f0, float vdh) {
+  float k = 1.0 - saturate(vdh);
+  float k2 = k * k;
+  return f0 + (1.0 - f0) * k2 * k2 * k;
+}
+
+// Specular light for one light of colour `light` (already attenuated and
+// shadowed) arriving along l: pi * D * V * F * N.L.
+float3 SparrowSpecular(float3 n, float3 v, float3 l, float roughness, float f0, float3 light) {
+  float ndl = saturate(dot(n, l));
+  float ndv = max(dot(n, v), 1e-4);
+  if (ndl <= 0.0) return 0.0;
+  float3 h = normalize(l + v);
+  float ndh = saturate(dot(n, h));
+  float a = max(roughness * roughness, 0.002);
+  float a2 = a * a;
+  float d = ndh * ndh * (a2 - 1.0) + 1.0;
+  float D = a2 / (3.14159265 * d * d);
+  float gv = ndl * sqrt(ndv * ndv * (1.0 - a2) + a2);
+  float gl = ndv * sqrt(ndl * ndl * (1.0 - a2) + a2);
+  float V = 0.5 / max(gv + gl, 1e-5);
+  float F = SparrowFresnel(f0, dot(v, h));
+  return light * (3.14159265 * D * V * F * ndl);
+}
+
+// The same lobe split for a specular colour known only later (a material's
+// specular map as F0): F = f0 (1 - Fk) + Fk, so the caller forms
+// f0 * base + grazing.
+void SparrowSpecularSplit(float3 n, float3 v, float3 l, float roughness, float3 light,
+                          inout float3 base, inout float3 grazing) {
+  float3 s = SparrowSpecular(n, v, l, roughness, 1.0, light);  // F = 1
+  float k = 1.0 - saturate(dot(v, normalize(l + v)));
+  float k2 = k * k;
+  float fk = k2 * k2 * k;
+  base += s * (1.0 - fk);
+  grazing += s * fk;
+}
+
+// Sky reflection weight for the ambient light: Fresnel at the view angle,
+// damped by roughness (rough surfaces scatter it into the diffuse they
+// already have). Multiply by the ambient/sky light.
+float SparrowEnvSpecular(float3 n, float3 v, float roughness, float f0) {
+  float ndv = saturate(dot(n, v));
+  float k = 1.0 - ndv;
+  float k2 = k * k;
+  float f = f0 + (max(1.0 - roughness, f0) - f0) * k2 * k2 * k;
+  float smooth = 1.0 - roughness;
+  return f * smooth * smooth;
+}
+
+
+// --- Sky light and bounce light ---------------------------------------------
+// The sun map is a height field of everything the sun sees, and each of its
+// texels is a sunlit surface point whose world position can be rebuilt.
+//   SparrowSkyVisibility: how much of the sky above a point is open (8
+//     directions x 3 distances, horizon angles from the rebuilt points).
+//   SparrowBounce: sunlight bounced off the nearby sunlit points (one
+//     bounce, Lambert, no occlusion between them), in the game's light
+//     units per unit sun colour: multiply by the sun's colour.
+#ifndef SPARROW_BOUNCE_ALBEDO
+#define SPARROW_BOUNCE_ALBEDO float3(0.42, 0.36, 0.28)  // earth, sandstone, plaster
+#endif
+#ifndef SPARROW_BOUNCE_RADIUS
+#define SPARROW_BOUNCE_RADIUS 6.0
+#endif
+
+struct SparrowFrameData {
+  float3 centre, l, right, up;
+  float radius, depth_half, size;
+  bool valid;
+};
+
+SparrowFrameData SparrowFrame() {
+  SparrowFrameData f = (SparrowFrameData)0;
+  uint rows = SparrowSunRows();
+  if (rows < 2u) return f;
+  int fr = int(rows) - 1;
+  f.valid = SparrowMap(int2(6, fr)) > 0.5;
+  f.centre = float3(SparrowMap(int2(0, fr)), SparrowMap(int2(1, fr)), SparrowMap(int2(2, fr)));
+  float sr = SparrowMap(int2(3, fr));
+  f.radius = abs(sr);
+  f.depth_half = SparrowMap(int2(4, fr));
+  f.size = SparrowMap(int2(5, fr));
+  f.l = float3(SparrowMap(int2(8, fr)), SparrowMap(int2(9, fr)), SparrowMap(int2(10, fr)));
+  float3 ref = abs(f.l.x) < 0.9 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
+  f.right = normalize(cross(ref, f.l));
+  f.up = cross(f.l, f.right);
+  if (sr < 0.0) f.up = -f.up;
+  f.valid = f.valid && f.radius > 0.0 && f.depth_half > 0.0 && f.size >= 1.0;
+  return f;
+}
+
+// The sunlit surface point the map holds at the map-plane position of
+// `pos` + `offset` (world units along right / up); false where nothing is
+// drawn or outside the map.
+bool SparrowSunlitPoint(SparrowFrameData f, float3 pos, float2 offset, out float3 hit) {
+  float3 v = pos - f.centre;
+  float x = dot(f.right, v) + offset.x, y = dot(f.up, v) + offset.y;
+  hit = 0.0;
+  float2 m = float2(x, y) / f.radius;
+  if (max(abs(m.x), abs(m.y)) >= 1.0) return false;
+  // Bilinear over the four texels (ones with nothing drawn left out), so
+  // heights vary smoothly between texels.
+  float2 uv = float2(m.x * 0.5 + 0.5, 0.5 - m.y * 0.5) * f.size - 0.5;
+  int2 b = int2(floor(uv));
+  float2 fr = uv - float2(b);
+  int2 hi = int2(int(f.size) - 1, int(f.size) - 1);
+  float d00 = SparrowMap(clamp(b, 0, hi)), d10 = SparrowMap(clamp(b + int2(1, 0), 0, hi));
+  float d01 = SparrowMap(clamp(b + int2(0, 1), 0, hi)), d11 = SparrowMap(clamp(b + int2(1, 1), 0, hi));
+  float4 w4 = float4((1.0 - fr.x) * (1.0 - fr.y), fr.x * (1.0 - fr.y), (1.0 - fr.x) * fr.y, fr.x * fr.y);
+  w4 *= float4(d00 > 0.0, d10 > 0.0, d01 > 0.0, d11 > 0.0);
+  float wsum = dot(w4, 1.0);
+  if (wsum <= 1e-4) return false;
+  float d = dot(w4, float4(d00, d10, d01, d11)) / wsum;
+  hit = f.centre + f.right * x + f.up * y + f.l * ((d - 0.5) * 2.0 * f.depth_half);
+  return true;
+}
+
+// 0 (closed in) .. 1 (open sky), cosine-weighted for the normal n; -1
+// where the map is off or does not cover the point.
+float SparrowSkyVisibility(float3 pos, float3 n) {
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return -1.0;
+  float3 v = pos - f.centre;
+  if (max(abs(dot(f.right, v)), abs(dot(f.up, v))) >= f.radius * 0.97) return -1.0;
+  // Search from half a metre out along the normal: from the face itself a
+  // wall finds its own top overhead and shades itself.
+  float3 origin = pos + n * 0.5;
+  const float radii[3] = {0.6, 1.8, 5.0};
+  // The nearest ring counts less: with eight directions a thin pole or a
+  // person would block a whole 45-degree slice.
+  const float ring_weight[3] = {0.5, 1.0, 1.0};
+  float open = 0.0, weight = 0.0;
+  [unroll] for (int k = 0; k < 8; ++k) {
+    float a = (float(k) + 0.5) * (6.2831853 / 8.0);
+    float2 dir = float2(cos(a), sin(a));
+    float sin_h = 0.0;  // highest horizon in this direction
+    float3 hdir = normalize(f.right * dir.x + f.up * dir.y);
+    [unroll] for (int j = 0; j < 3; ++j) {
+      float3 hit;
+      if (SparrowSunlitPoint(f, origin, dir * radii[j], hit)) {
+        float3 w = hit - origin;
+        float len = length(w);
+        if (len > 0.05) sin_h = max(sin_h, ring_weight[j] * w.z / len);
+      }
+    }
+    // The open part of this slice above the horizon, weighted by how much
+    // that part of the sky faces the surface (a vertical wall sees half).
+    float facing = saturate(0.5 + 0.5 * dot(n, normalize(float3(hdir.xy, 0.0) + float3(0.0, 0.0, 1e-3))));
+    float w8 = lerp(1.0, facing, saturate(1.0 - n.z));
+    open += (1.0 - sin_h * sin_h) * w8;
+    weight += w8;
+  }
+  return weight > 0.0 ? open / weight : -1.0;
+}
+
+// Bounce light per unit sun colour, in the game's light units.
+float3 SparrowBounce(float3 pos, float3 n) {
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return 0.0;
+  const int N = 16;
+  float area = 3.14159265 * SPARROW_BOUNCE_RADIUS * SPARROW_BOUNCE_RADIUS / float(N);
+  float sum = 0.0;
+  [unroll] for (int k = 0; k < N; ++k) {
+    // Spiral over the disc (golden angle), denser near the point.
+    float r = SPARROW_BOUNCE_RADIUS * sqrt((float(k) + 0.5) / float(N));
+    float a = float(k) * 2.3999632;
+    float3 hit;
+    if (!SparrowSunlitPoint(f, pos, float2(cos(a), sin(a)) * r, hit)) continue;
+    float3 w = hit - pos;
+    float d2 = max(dot(w, w), 0.25);
+    w *= rsqrt(d2);
+    float cos_r = saturate(dot(n, w));
+    float cos_p = saturate(dot(-w, f.l) + 0.3);  // patch roughly faces the sun
+    sum += cos_r * cos_p / d2;
+  }
+  return SPARROW_BOUNCE_ALBEDO * (sum * area / 3.14159265);
+}
+
+#ifndef SPARROW_SKY
+#define SPARROW_SKY 1.0      // how much the sky's openness shapes the ambient
+#endif
+#ifndef SPARROW_BOUNCE
+#define SPARROW_BOUNCE 1.0
+#endif
+// The sky light kept where the sun map sees no open sky at all: under a tree
+// canopy the map's heights are solid, but leaves let light through and the
+// game's baked light already darkens the ground there. Applied as
+// vis + F (1 - vis)^2: closed-in points keep F of the game's ambient, while
+// half-open ones (an arch: 0.67 -> 0.71) barely move.
+#ifndef SPARROW_SKY_FLOOR
+#define SPARROW_SKY_FLOOR 0.4
+#endif
+float SparrowSkyTerm(float vis) {
+  float c = 1.0 - vis;
+  return lerp(1.0, vis + SPARROW_SKY_FLOOR * c * c, SPARROW_SKY);
+}
+
+// --- Ground ambient grid -----------------------------------------------------
+// The SDK works out sky visibility and bounce once a frame, one cell per
+// 8 x 8 map texels, with the same search as above (sparrow_ambient.cs.hlsl).
+// A cell is the line along the sun through its centre: a ground point maps
+// to it whatever its height, and the cell holds the visibility at four
+// heights spanning the occluders around, so the lookup interpolates at the
+// point's own height (the ground itself is not in the map: it is drawn as
+// blended colour-pass layers). Bilinear over four cells. -2: no grid this
+// frame, -3: outside the map.
+float SparrowGroundAmbient(float3 pos, out float bounce) {
+  bounce = 0.0;
+  uint rows = SparrowSunRows();
+  if (rows < 2u) return -2.0;
+  int fr = int(rows) - 1;
+  if (SparrowMap(int2(6, fr)) < 0.5 || SparrowMap(int2(13, fr)) < 0.5) return -2.0;
+  SparrowFrameData f = SparrowFrame();
+  if (!f.valid) return -2.0;
+  int size = int(f.size), g = size / 8;
+  float3 v = pos - f.centre;
+  float2 m = float2(dot(f.right, v), dot(f.up, v)) / f.radius;
+  if (max(abs(m.x), abs(m.y)) >= 0.97) return -3.0;
+  float2 uv = float2(m.x * 0.5 + 0.5, 0.5 - m.y * 0.5) * float(g) - 0.5;
+  int2 b = int2(floor(uv));
+  float2 fu = uv - float2(b);
+  float vis = 0.0;
+  [unroll] for (int k = 0; k < 4; ++k) {
+    int2 o = int2(k & 1, k >> 1);
+    int2 c = clamp(b + o, 0, g - 1);
+    float w = (o.x ? fu.x : 1.0 - fu.x) * (o.y ? fu.y : 1.0 - fu.y);
+    int row = size + c.y;
+    float lo = SparrowMap(int2(4 * g + c.x, row)), hi = SparrowMap(int2(5 * g + c.x, row));
+    float t = saturate((pos.z - lo) / max(hi - lo, 0.01)) * 3.0;
+    float v0 = SparrowMap(int2(c.x, row)), v1 = SparrowMap(int2(g + c.x, row));
+    float v2 = SparrowMap(int2(2 * g + c.x, row)), v3 = SparrowMap(int2(3 * g + c.x, row));
+    float cv = t < 1.0 ? lerp(v0, v1, t) : (t < 2.0 ? lerp(v1, v2, t - 1.0) : lerp(v2, v3, t - 2.0));
+    vis += w * cv;
+    bounce += w * SparrowMap(int2(6 * g + c.x, row));
+  }
+  return saturate(vis);
+}
+
+// SparrowAmbient for upward-facing ground through the grid (n: the surface
+// normal; steep faces keep the game's ambient).
+float3 SparrowGroundAmbientLight(float3 ambient, float3 pos, float3 n, float3 sun, out float vis_out) {
+  vis_out = -1.0;
+  if (n.z < 0.6) return ambient;
+  float bounce;
+  float vis = SparrowGroundAmbient(pos, bounce);
+  vis_out = vis;
+  if (vis < 0.0) return ambient;
+  vis_out = vis;
+  return ambient * SparrowSkyTerm(vis) +
+         SPARROW_BOUNCE_ALBEDO * bounce * saturate(n.z) * sun * SPARROW_BOUNCE;
+}
+
+// The faint sky sheen the cobbles have (path.ps.hlsl, SPARROW_SKY_REFLECT),
+// for the dirt and earth around them: without it the sheen stops at the
+// cobble layer's edge and draws a straight line there. ambient: the
+// material's ambient light (game units, before albedo); v: toward the camera.
+#ifndef SPARROW_GROUND_SHEEN
+#define SPARROW_GROUND_SHEEN 0.25
+#endif
+#ifndef SPARROW_GROUND_ROUGHNESS
+#define SPARROW_GROUND_ROUGHNESS 0.55
+#endif
+float3 SparrowGroundSheen(float3 ambient, float3 n, float3 v) {
+  return ambient * SparrowEnvSpecular(n, v, SPARROW_GROUND_ROUGHNESS, SPARROW_F0) * SPARROW_GROUND_SHEEN;
+}
+
+// --- Character highlights ----------------------------------------------------
+// The game draws characters nearly matte: their specular maps are close to
+// zero on hair, clothes and skin, so the map cannot tell cloth, leather and
+// metal apart. Instead the SDK tags each character draw with a material from
+// a table of albedo texture hashes (shaders/sparrow_replace/
+// character_materials.txt, xe_flags bits 29-30):
+//   0 cloth   (unlisted) a soft dielectric lobe and a faint grazing sky sheen,
+//                        the fabric's rim; the look the user approved first
+//   1 leather            a tighter, brighter dielectric lobe
+//   2 metal              a sharp lobe tinted by the albedo (F0 = albedo) and
+//                        a strong sky reflection; the diffuse stays, since the
+//                        game's albedo has the metal's shading painted in
+//   3 gloss              polished dielectric (lacquer, jewel, wet skin)
+// light: the light's colour, attenuated and shadowed but without N.L;
+// ambient: the ambient light in game units (times c27.w), before the albedo.
+#ifndef SPARROW_CHAR_ROUGH
+#define SPARROW_CHAR_ROUGH 0.6
+#endif
+#ifndef SPARROW_CHAR_SPEC
+#define SPARROW_CHAR_SPEC 1.0
+#endif
+#ifndef SPARROW_CHAR_SHEEN
+#define SPARROW_CHAR_SHEEN 0.5
+#endif
+#ifndef SPARROW_LEATHER_ROUGH
+#define SPARROW_LEATHER_ROUGH 0.42
+#endif
+#ifndef SPARROW_LEATHER_SPEC
+#define SPARROW_LEATHER_SPEC 1.3
+#endif
+#ifndef SPARROW_METAL_ROUGH
+#define SPARROW_METAL_ROUGH 0.32
+#endif
+#ifndef SPARROW_METAL_SPEC
+#define SPARROW_METAL_SPEC 1.0
+#endif
+#ifndef SPARROW_METAL_SHEEN
+#define SPARROW_METAL_SHEEN 1.5
+#endif
+#ifndef SPARROW_GLOSS_ROUGH
+#define SPARROW_GLOSS_ROUGH 0.22
+#endif
+struct SparrowCharMat {
+  float rough;
+  float f0;
+  float3 tint;   // colour of the highlight (white for dielectrics)
+  float spec;    // light lobe scale
+  float sheen;   // sky reflection scale
+};
+uint SparrowCharMaterialId() { return (xe_flags >> 29) & 3u; }
+// albedo: the colour map (TF0) in linear terms (squared).
+SparrowCharMat SparrowCharMaterial(float3 albedo) {
+  SparrowCharMat m;
+  m.rough = SPARROW_CHAR_ROUGH; m.f0 = SPARROW_F0; m.tint = 1.0;
+  m.spec = SPARROW_CHAR_SPEC; m.sheen = SPARROW_CHAR_SHEEN;
+  uint id = SparrowCharMaterialId();
+  if (id == 1u) {
+    m.rough = SPARROW_LEATHER_ROUGH; m.spec = SPARROW_LEATHER_SPEC;
+  } else if (id == 2u) {
+    float lum = max(dot(albedo, float3(0.2126, 0.7152, 0.0722)), 1e-3);
+    m.rough = SPARROW_METAL_ROUGH;
+    m.f0 = saturate(lum);
+    m.tint = saturate(albedo / lum);
+    m.spec = SPARROW_METAL_SPEC; m.sheen = SPARROW_METAL_SHEEN;
+  } else if (id == 3u) {
+    m.rough = SPARROW_GLOSS_ROUGH; m.f0 = 0.05;
+  }
+  return m;
+}
+// sparrow_debug 4: a strong material colour on characters (none on cloth,
+// orange leather, cyan metal, magenta gloss), added through the sheen, which
+// every character shader adds exactly once.
+float3 SparrowCharMaterialDebug() {
+  if (SparrowDebug() != 4) return 0.0;
+  uint id = SparrowCharMaterialId();
+  return id == 1u ? float3(8.0, 3.0, 0.0) : id == 2u ? float3(0.0, 6.0, 8.0)
+       : id == 3u ? float3(8.0, 0.0, 8.0) : float3(0.0, 0.0, 0.0);
+}
+float3 SparrowCharacterSpecular(float3 n, float3 v, float3 l, float3 light, SparrowCharMat m) {
+  return SparrowSpecular(n, v, l, m.rough, m.f0, light) * (m.tint * m.spec);
+}
+float3 SparrowCharacterSheen(float3 ambient, float3 n, float3 v, SparrowCharMat m) {
+  return ambient * SparrowEnvSpecular(n, v, m.rough, m.f0) * (m.tint * m.sheen) +
+         SparrowCharMaterialDebug();
+}
+
+// sparrow_debug 3: sky visibility as red (open) .. green (closed in), blue
+// where Sparrow does not cover the point (vis < 0) and the game's ambient
+// stays. Through the tonemap, read vis as R / (R + G).
+float3 SparrowVisDebug(float vis) {
+  // Ground grid misses: -2 no grid this frame (magenta), -3 outside the map
+  // (cyan); -1 not covered / steep (blue).
+  if (vis < -2.5) return float3(0.0, 0.5, 0.5);
+  if (vis < -1.5) return float3(0.5, 0.0, 0.5);
+  return vis < 0.0 ? float3(0.0, 0.0, 0.5) : float3(vis, 1.0 - vis, 0.0) * 0.5;
+}
+
+// The material's ambient light (game units, before albedo) shaped by the
+// open sky and given the sun's bounce. vis_out: the sky visibility (for
+// sparrow_debug 3), -1 where not covered.
+float3 SparrowAmbient(float3 ambient, float3 pos, float3 n, float3 sun, out float vis_out) {
+  float vis = SparrowSkyVisibility(pos, n);
+  vis_out = vis;
+  if (vis < 0.0) return ambient;
+  return ambient * SparrowSkyTerm(vis) + SparrowBounce(pos, n) * sun * SPARROW_BOUNCE;
+}
+
+#endif

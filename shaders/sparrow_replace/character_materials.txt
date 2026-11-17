@@ -1,0 +1,37 @@
+# Project Sparrow character materials, by texture hash (the texture pack's
+# dump names). Read by the SDK cvar character_materials; character draws that
+# use a listed texture get its material (shaders/sparrow_common.hlsli,
+# SparrowCharMaterial). Unlisted textures stay cloth (the soft default).
+# Materials: leather, metal, gloss.   Format: <16 hex digits> <material>  # note
+# The game re-reads this file within a second when it changes.
+
+# metal
+2931870243D2EC1C metal  # helmet / face plate
+58D150DC776C9D60 metal  # helmet / face plate (large)
+6BA4A76E5EA22238 metal  # armour piece
+0E440F669F38EC56 metal  # plate piece
+4F43DA7B82DF6ABF metal  # plate piece (large)
+5A978B7E5541A9B8 metal  # grey plate armour
+9B1D18256A3765D2 metal  # grey plate armour (small)
+88390867ADB4FC19 metal  # blade and hilt
+D3F716806DA029B9 metal  # blade and hilt (large)
+2F6EF90AEE3AE281 metal  # ornate silver hilt
+405F137FFB44B3D6 metal  # weapon / armour pieces
+0D6080ED7F380A70 metal  # iron bars, brass trim
+57EA576C15C2BB22 metal  # iron bars, brass trim
+49B51C3D1E3091B2 metal  # ornate blue metal panel
+
+# leather
+4347AAD8EACCB2AB leather  # stitched brown leather
+7F4CEAB0C3F06D7B leather  # stitched brown leather (small)
+2F92171C84CABA64 leather  # stitched brown leather (large)
+F584950777BCE2CE leather  # gloves
+31A109B26F56D93E leather  # gloves (large)
+83FDF714329824D9 leather  # leather jerkin
+
+# gloss
+C88124DC78C22482 gloss  # eye
+FA8D915C1674F2ED gloss  # eye
+21F946EA6B4B6FF9 gloss  # eye
+3D9FA087DC0EEA82 gloss  # creature eye
+23CBDEF635D07DC1 gloss  # creature eye (red)

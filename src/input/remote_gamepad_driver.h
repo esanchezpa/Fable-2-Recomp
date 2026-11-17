@@ -51,11 +51,12 @@ class GamepadDriver final : public rex::input::InputDriver {
   // driver by id, so two instances sharing one would shadow each other.
   GamepadDriver(rex::ui::Window* window, size_t window_z_order,
                 InputStateStore* state, std::atomic<bool>* enabled,
-                DeviceId device_id = kDefaultDeviceId)
+                DeviceId device_id = kDefaultDeviceId, int32_t fixed_user = -1)
       : rex::input::InputDriver(window, window_z_order),
         state_(state),
         enabled_(enabled),
-        device_id_(device_id) {}
+        device_id_(device_id),
+        fixed_user_(fixed_user) {}
 
   X_STATUS Setup() override { return X_STATUS_SUCCESS; }
 
@@ -65,6 +66,7 @@ class GamepadDriver final : public rex::input::InputDriver {
     info.name = "Remote (AI) gamepad";
     info.guid = "fable2-remote-gamepad";
     info.synthetic = true;  // routed to guest user 0 by the default assignment
+    info.fixed_user = fixed_user_;  // ...unless pinned to player 2-4
     out.push_back(info);
   }
 
@@ -132,6 +134,7 @@ class GamepadDriver final : public rex::input::InputDriver {
   // first match.
   static constexpr DeviceId kDefaultDeviceId{1ull << 61};
   DeviceId device_id_;
+  int32_t fixed_user_;
 
   InputStateStore* state_;
   std::atomic<bool>* enabled_;

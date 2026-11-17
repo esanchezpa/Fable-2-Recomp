@@ -49,6 +49,7 @@
 
 #include "fable2_config.h"  // direct_mouse_look toggle
 #include "../core/fable2_keycap_swap.h"  // real-time keycap prompt swap
+#include "fable2_texture_pack.h"  // Classic/Modern graphics toggle key
 #include "mouse_look.h"     // fable2::mouselook (accumulates the mouse delta)
 
 #ifdef _WIN32
@@ -271,6 +272,8 @@ class KeyboardGamepadDriver final : public rex::input::InputDriver {
     // probe, so this just latches a flag. Runs even while the console (F4) is
     // open (F5 is a host-level developer command, not gamepad input).
     fable2::f5lua::poll_f5(focused);
+    // Texture pack toggle (default F8): Classic <-> Modern graphics.
+    fable2::texturepack::PollToggle(focused);
 
     // Real-time keycap prompt swap: the prompt variant follows guest user 0's
     // most recent input device (keyboard/mouse -> keycaps, pad -> controller

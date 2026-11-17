@@ -39,7 +39,16 @@ public class Fable2ConfigValues
     public bool HeroDogTextureReadback { get; set; } = false;
 
     // [perf]
+    // [graphics] texture_pack: Modern graphics (the texture pack, filtering, grade
+    // and shader rewrites). The launcher turns it off while the pack downloads.
+    public bool TexturePack { get; set; } = true;
+    // [graphics] ultra: Settings > Ultra lighting (on when Enhanced is picked).
+    public bool Ultra { get; set; } = false;
+
     public int HotFuncYieldEvery { get; set; } = 1;  // 1 = original, 0 = never yield
+    // [perf] performance_log: Help > Record performance logs (frame rate log, plus the
+    // launcher turns on [pipeline-timing] in the game log).
+    public bool PerformanceLog { get; set; } = true;
 }
 
 /// <summary>One host-key -> guest-input binding (a "Key:Button" pair).</summary>
@@ -129,6 +138,11 @@ public static class Fable2ConfigFile
                     break;
                 case "perf":
                     if (key == "hotfunc_yield_every") values.HotFuncYieldEvery = ParseInt(rawValue, values.HotFuncYieldEvery);
+                    else if (key == "performance_log") values.PerformanceLog = ParseBool(rawValue, values.PerformanceLog);
+                    break;
+                case "graphics":
+                    if (key == "texture_pack") values.TexturePack = ParseBool(rawValue, values.TexturePack);
+                    else if (key == "ultra") values.Ultra = ParseBool(rawValue, values.Ultra);
                     break;
             }
         }
@@ -172,6 +186,9 @@ public static class Fable2ConfigFile
             ("patches", "realtime_texture_morphing", values.RealtimeTextureMorphing ? "true" : "false"),
             ("patches", "hero_dog_texture_readback", values.HeroDogTextureReadback ? "true" : "false"),
             ("perf", "hotfunc_yield_every", values.HotFuncYieldEvery.ToString(CultureInfo.InvariantCulture)),
+            ("perf", "performance_log", values.PerformanceLog ? "true" : "false"),
+            ("graphics", "texture_pack", values.TexturePack ? "true" : "false"),
+            ("graphics", "ultra", values.Ultra ? "true" : "false"),
         };
 
         var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

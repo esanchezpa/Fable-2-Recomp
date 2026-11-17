@@ -1,7 +1,8 @@
 // fable_2 - ReXGlue Recompiled Project
 //
 // fable2_config.toml: the recomp's own user config (separate from the ReXGlue
-// SDK cvar config fable_2.toml). Look for it next to the exe, create it with
+// SDK cvar config fable_2.toml). Look for it in the user root (--user_root,
+// default next to the exe), create it with
 // defaults if missing, parse it, and expose the values via Get().
 //
 // Growth model: add a member to Values (with its default), read it in Load()
@@ -280,6 +281,28 @@ gpu_frame_sync = true
 # Default: 1
 hotfunc_yield_every = 1
 
+# Game Loop Sleep: between the game's fixed simulation steps its main loop
+# used to spin on a yield until the next step was due, keeping a CPU core at
+# 100%. On, it sleeps on a high-resolution timer until just before the next
+# step, then yields for the last fraction of a millisecond as before. Frees
+# most of a core (useful on laptops and handhelds) with the same step timing.
+# false = spin as the original game does. Default: true
+game_loop_sleep = true
+
+# Frame Limiter Sleep: the render thread waits for the emulated GPU to catch
+# up before starting the next frame. It used to spin on a CPU core while it
+# waited; on, it sleeps and the GPU thread wakes it the moment it moves on.
+# Same frame pacing, less CPU heat. false = spin as before. Default: true
+frame_limiter_sleep = true
+
+# Performance Log: writes logs\perf_<date>-<time>.log while you play: the
+# frame rate every 10 seconds, the slowest 1% of frames, and every stall of
+# 100 ms or more. About 25 KB per hour; the 20 newest logs are kept. Help >
+# Report a problem in the launcher includes them. With it on, the launcher
+# also logs slow shader builds ([pipeline-timing]) in the game log.
+# false = no performance log. Default: true
+performance_log = true
+
 # Refresh GPU Memory Each Frame (SDK cvar clear_memory_page_state): at the end of
 # every frame the SDK forgets which guest memory it has already copied to the
 # GPU, so everything the next frame uses is copied again. It is a safety net for
@@ -287,6 +310,95 @@ hotfunc_yield_every = 1
 # FPS indoors with nothing missing on screen in testing.
 # false = trust the write tracking. Default: false
 refresh_gpu_memory_each_frame = false
+
+[graphics]
+# Texture Pack: shows replacement textures (for example the Modern textures) from
+# the textures\replace folder next to fable2_config.toml in place of the
+# originals. Switch between the pack ("Modern") and the original textures
+# ("Classic") while playing with texture_pack_toggle_key. A shared pack
+# holds .edds files: each one is locked to the game texture it replaces
+# and only opens next to the game it was made from (tools/keyed_pack.py).
+# true = Modern, false = Classic. Default: true
+texture_pack = true
+
+# Key that switches between the texture pack and the original textures in game
+# (a key name such as "F8", "F6" or "Home"; empty = no key). F3, F4, F5, F7
+# and F9 already open other tools.
+# Default: "F8"
+texture_pack_toggle_key = "F8"
+
+# Texture Dump: writes every game texture once, as it is first seen, to the
+# textures\dump folder as a DDS file. These are the input for the texture
+# pack tools. The first town is about 80 MB. Default: false
+texture_dump = false
+
+# Post-Processing: a colour grade in Modern graphics that adds depth without
+# changing the game's look: a little less haze, local contrast, a gentle
+# contrast curve, livelier muted colours and light sharpening. The overall
+# brightness is kept. Default: true
+post_processing = true
+
+# Ambient Occlusion: soft contact shadows where surfaces meet (under rocks,
+# ruins and roofs, between leaves), worked out from the game's depth buffer
+# and faded out with distance. Part of Post-Processing: only on when that and
+# Modern graphics are on. Costs about 2% FPS. Default: true
+ambient_occlusion = true
+
+# Sun Shadows: short, sharp sun shadows from rocks, roots, trunks and walls
+# onto the ground (the game's light maps only give soft blotches), traced
+# through the depth buffer. Part of Ambient Occlusion: only on when that is.
+# Default: true
+sun_shadows = true
+
+# Sun Shadow Map: draws the scene a second time from the sun (redrawn every
+# other frame), so nearby walls, rocks, trunks and characters
+# cast proper, stable shadows even when they are off screen; further away the
+# traced shadows above take over. Needs Sun Shadows. Costs about 5-15% of the
+# frame rate when uncapped. Default: true
+sun_shadow_map = true
+
+# Ultra: the Sparrow Edition look, on top of the settings above. Light shafts
+# through the trees when facing the sun, a sharper and wider sun shadow map
+# redrawn every frame, stronger contact shading and a clearer far distance.
+# Costs about 5-10% of the frame rate when uncapped. Default: false
+ultra = false
+
+# Project Sparrow (in development): the new renderer. For now, the ground,
+# rocks and buildings take their sun shadows from the sun shadow map inside
+# their own shaders (shaders\sparrow_replace next to the game) instead of
+# the darkening pass. Needs Sun Shadow Map, Ambient Occlusion and Shader
+# Rewrites. Read at startup. Default: false
+sparrow_renderer = false
+
+# Anti-Aliasing: FXAA on the final picture. Smooths the stair-stepped edges
+# that remain on leaves and grass. Part of Post-Processing. Costs under 1% FPS.
+# Default: true
+anti_aliasing = true
+
+# Bloom: a soft glow around the brightest parts of the picture. The game
+# already has its own bloom, so this mostly brightens bright skies further.
+# Part of Post-Processing. Costs under 1% FPS. Default: false
+bloom = false
+
+# Shader Rewrites: replaces some of the game's own shaders with improved
+# versions (shaders\replace next to the game; see shaders/README.md in the
+# source). Currently: water (finer ripples, sun glint, truer reflection
+# falloff). Read at startup, so F8 does not switch it. Default: true
+shader_rewrites = true
+
+# Texture Filtering: anisotropic filtering level in Modern graphics (0, 2, 4,
+# 8 or 16). Keeps ground and walls sharp at shallow angles. Classic uses the
+# game's own filtering. 0 = never override. Default: 16
+texture_filtering = 16
+
+# Draw Distance: multiplies how far away the game keeps drawing world objects
+# (rocks, ruins, fences, props) and animated objects. 1.0 = original; 3.0
+# fills in distant detail for about 3% of frame rate, 6.0 adds little more for
+# about 11%. Read at startup (not switched by the toggle key). Default: 3.0
+draw_distance = 3.0
+
+# Character Draw Distance: the same for villagers and creatures. Default: 1.0
+character_draw_distance = 1.0
 )TOML_EOF";
 
 std::string_view TypeName(toml::node_type t) {
@@ -349,8 +461,8 @@ bool Load(const std::filesystem::path& path) {
 
   // Warn about unknown top-level sections (usually a typo or a file written
   // for a newer build).
-  static constexpr std::array<std::string_view, 4> kKnownSections = {
-      "general", "input", "patches", "perf"};
+  static constexpr std::array<std::string_view, 5> kKnownSections = {
+      "general", "input", "patches", "perf", "graphics"};
   for (const auto& [key, value] : root) {
     const bool known =
         std::ranges::find(kKnownSections, key.str()) != kKnownSections.end();
@@ -485,9 +597,52 @@ bool Load(const std::filesystem::path& path) {
     values.hotfunc_yield_every = static_cast<int32_t>(Read<int64_t>(
         perf_table, "perf", "hotfunc_yield_every", "integer",
         values.hotfunc_yield_every));
+    values.game_loop_sleep = Read<bool>(perf_table, "perf", "game_loop_sleep", "boolean",
+                                        values.game_loop_sleep);
+    values.frame_limiter_sleep = Read<bool>(perf_table, "perf", "frame_limiter_sleep",
+                                            "boolean", values.frame_limiter_sleep);
+    values.performance_log = Read<bool>(perf_table, "perf", "performance_log", "boolean",
+                                        values.performance_log);
     values.refresh_gpu_memory_each_frame = Read<bool>(
         perf_table, "perf", "refresh_gpu_memory_each_frame", "boolean",
         values.refresh_gpu_memory_each_frame);
+  }
+  const toml::path graphics_path{"graphics"};
+  const auto graphics = root[graphics_path];
+  if (graphics.is_table()) {
+    const toml::table& graphics_table = *graphics.as_table();
+    values.texture_pack = Read<bool>(graphics_table, "graphics", "texture_pack", "boolean",
+                                     values.texture_pack);
+    values.texture_pack_toggle_key =
+        Read<std::string>(graphics_table, "graphics", "texture_pack_toggle_key", "string",
+                          values.texture_pack_toggle_key);
+    values.texture_dump = Read<bool>(graphics_table, "graphics", "texture_dump", "boolean",
+                                     values.texture_dump);
+    values.post_processing = Read<bool>(graphics_table, "graphics", "post_processing", "boolean",
+                                        values.post_processing);
+    values.ambient_occlusion = Read<bool>(graphics_table, "graphics", "ambient_occlusion",
+                                          "boolean", values.ambient_occlusion);
+    values.sun_shadows = Read<bool>(graphics_table, "graphics", "sun_shadows", "boolean",
+                                    values.sun_shadows);
+    values.sun_shadow_map = Read<bool>(graphics_table, "graphics", "sun_shadow_map", "boolean",
+                                       values.sun_shadow_map);
+    values.ultra = Read<bool>(graphics_table, "graphics", "ultra", "boolean", values.ultra);
+    values.sparrow_renderer = Read<bool>(graphics_table, "graphics", "sparrow_renderer",
+                                         "boolean", values.sparrow_renderer);
+    values.anti_aliasing = Read<bool>(graphics_table, "graphics", "anti_aliasing", "boolean",
+                                      values.anti_aliasing);
+    values.bloom = Read<bool>(graphics_table, "graphics", "bloom", "boolean", values.bloom);
+    values.shader_rewrites = Read<bool>(graphics_table, "graphics", "shader_rewrites", "boolean",
+                                        values.shader_rewrites);
+    values.texture_filtering = static_cast<int32_t>(
+        Read<int64_t>(graphics_table, "graphics", "texture_filtering", "integer",
+                      values.texture_filtering));
+    values.draw_distance = static_cast<float>(
+        Read<double>(graphics_table, "graphics", "draw_distance", "number",
+                     values.draw_distance));
+    values.character_draw_distance = static_cast<float>(
+        Read<double>(graphics_table, "graphics", "character_draw_distance", "number",
+                     values.character_draw_distance));
   }
 
   g_values = values;
