@@ -26,6 +26,13 @@
 #include <vector>
 
 namespace fable2::gui {
+
+// Bytes of assets/fonts/Google Sans/GoogleSans-VariableFont_GRAD,opsz,wght.ttf,
+// generated into the build tree by tools/embed_file.py (see CMakeLists.txt).
+// Defined with external linkage so the anonymous-namespace renderer can link
+// against them; generated keycap_font_data.cpp holds the definitions.
+extern const uint8_t kKeycapFont[];
+extern const uint32_t kKeycapFont_size;
 namespace {
 
 struct Px {
@@ -58,11 +65,11 @@ KeycapFont& LoadFont() {
   if (f.valid) return f;
   // The keycap glyphs are rendered from the font bundled with the app so the
   // look is identical on every OS (no dependency on host-installed fonts). The
-  // build stages it next to the exe (assets/fonts/Google Sans/...); see the
-  // POST_BUILD copy in CMakeLists.txt. The C:/Windows system-font entries are a
-  // best-effort fallback only (e.g. dev runs without the staged assets) -- the
-  // C:/Windows paths simply never open on non-Windows hosts, so the bundled
-  // font is the sole source there.
+  // build stages it next to the exe (assets/fonts/Google Sans/...; see the
+  // POST_BUILD copy in CMakeLists.txt) and also bakes the same bytes into the
+  // binary (generated keycap_font_data.cpp below) so deploys that ship the exe
+  // without the staged assets -- manual copies, slim QA packs -- still render
+  // glyphs instead of empty keycaps.
   const std::filesystem::path exe_dir = rex::filesystem::GetExecutableFolder();
   const std::vector<std::filesystem::path> candidates = {
       exe_dir / "assets/fonts/Google Sans/GoogleSans-VariableFont_GRAD,opsz,wght.ttf",
@@ -79,6 +86,19 @@ KeycapFont& LoadFont() {
     f.units_per_em = (int)(1.0 / stbtt_ScaleForMappingEmToPixels(&f.info, 1.0) + 0.5);
     f.valid = true;
     break;
+  }
+  if (!f.valid && kKeycapFont_size > 0) {
+    // No staged font next to the exe: fall back to the bytes baked into the
+    // binary (CMakeLists.txt -> keycap_font_data.cpp).
+    f.bytes.assign(kKeycapFont, kKeycapFont + kKeycapFont_size);
+    int offset = stbtt_GetFontOffsetForIndex(f.bytes.data(), 0);
+    if (offset >= 0) {
+      f.info.userdata = nullptr;  // use the default STBTT_malloc/free
+      if (stbtt_InitFont(&f.info, f.bytes.data(), offset)) {
+        f.units_per_em = (int)(1.0 / stbtt_ScaleForMappingEmToPixels(&f.info, 1.0) + 0.5);
+        f.valid = true;
+      }
+    }
   }
   return f;
 }

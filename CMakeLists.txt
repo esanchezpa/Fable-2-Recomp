@@ -360,6 +360,21 @@ add_custom_command(TARGET fable_2 POST_BUILD
 # exe so the prompt keycaps render identically on every OS (no dependency on
 # host-installed fonts). OFL.txt ships alongside the .ttf as the Open Font
 # License requires. Loaded by src/gui/keycap_render.cpp (LoadFont).
+# Embedded fallback for the same font (tools/embed_file.py): the staged copy
+# next to the exe is preferred, but a deploy that ships the exe without the
+# staged assets (manual copies, slim QA packs) would render the prompt keycaps
+# without their glyph. Baking the bytes in keeps the feature self-contained.
+set(FABLE2_KEYCAP_FONT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Google Sans/GoogleSans-VariableFont_GRAD,opsz,wght.ttf")
+set(FABLE2_KEYCAP_FONT_GEN "${CMAKE_CURRENT_BINARY_DIR}/keycap_font_data.cpp")
+add_custom_command(
+    OUTPUT "${FABLE2_KEYCAP_FONT_GEN}"
+    DEPENDS "${FABLE2_KEYCAP_FONT_SRC}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_file.py"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_file.py"
+            "${FABLE2_KEYCAP_FONT_SRC}" "${FABLE2_KEYCAP_FONT_GEN}" "fable2::gui" "kKeycapFont"
+    COMMENT "Embedding the keycap prompt font fallback"
+    VERBATIM)
+target_sources(fable_2 PRIVATE "${FABLE2_KEYCAP_FONT_GEN}")
+
 add_custom_command(TARGET fable_2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:fable_2>/assets/fonts/Google Sans"
