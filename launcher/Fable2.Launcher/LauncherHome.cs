@@ -25,6 +25,8 @@ public sealed class LauncherSettings
     public bool UltraDefaulted { get; set; }
     /// <summary>Window theme: "night", "dusk" (default) or "day".</summary>
     public string Theme { get; set; } = "dusk";
+    /// <summary>Launcher UI language: "en" (default) or "es" (L10n).</summary>
+    public string Language { get; set; } = "en";
     public bool Migrated { get; set; }
 }
 

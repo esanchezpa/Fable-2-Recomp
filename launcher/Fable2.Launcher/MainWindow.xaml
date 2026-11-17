@@ -931,6 +931,19 @@
 
       <!-- Corner tools -->
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0">
+        <Button Style="{StaticResource ToolPill}" Click="LanguageClicked" AutomationProperties.Name="Language">
+          <Button.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="English" Tag="en" Click="LanguageChosen" />
+              <MenuItem Header="Español" Tag="es" Click="LanguageChosen" />
+            </ContextMenu>
+          </Button.ContextMenu>
+          <StackPanel Orientation="Horizontal">
+            <Path Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource GoldHi}" StrokeThickness="1.5"
+                  Data="M12,3 a9,9 0 1 0 0.01,0 M12,2 V5 M12,19 V22 M3.2,8 H20.8 M3.2,16 H20.8 M12,3 C8,8 8,16 12,21 M12,3 C16,8 16,16 12,21" />
+            <TextBlock x:Name="LanguagePillText" Text="EN" Margin="8,0,0,0" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Style="{StaticResource ToolPill}" Click="OpenSettingsClicked" AutomationProperties.Name="Settings">
           <StackPanel Orientation="Horizontal">
             <Path Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource GoldHi}" StrokeThickness="1.5"
