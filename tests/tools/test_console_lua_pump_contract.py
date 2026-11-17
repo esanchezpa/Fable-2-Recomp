@@ -18,6 +18,7 @@ class ConsoleLuaPumpContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.host = (ROOT / "src/core/fable2_console.h").read_text(encoding="utf-8")
         cls.pump = (ROOT / "src/lua/console_pump.lua").read_text(encoding="utf-8")
+        cls.step = (ROOT / "src/lua/console_step.lua").read_text(encoding="utf-8")
 
     def test_file_transport_only_enqueues_lines_when_input_exists(self):
         poll = re.search(r"// New input file.*?// Freeze:", self.host, re.S)
@@ -44,7 +45,7 @@ class ConsoleLuaPumpContractTests(unittest.TestCase):
         self.assertIsNotNone(poll)
         body = poll.group(0)
         self.assertIn("Clock::now() - s.pump_req_time > std::chrono::seconds(20)", body)
-        self.assertIn('out("lua", "the Lua command pump did not start (load a save first); dropped: "', body)
+        self.assertIn('out("lua", "Lua commands are not ready (load a save first); dropped: " + s.lua_pending', body)
         self.assertIn("s.lua_pending.clear()", body)
 
     def test_dispatched_command_has_a_separate_reply_timeout(self):
@@ -53,11 +54,11 @@ class ConsoleLuaPumpContractTests(unittest.TestCase):
         body = poll.group(0)
         self.assertIn("s.lua_done.load() == s.lua_seq", body)
         self.assertIn("Clock::now() >= s.lua_deadline", body)
-        self.assertIn('out("lua", "no reply from the Lua command pump within 30 s", true)', body)
+        self.assertIn('out("lua", "no reply from the Lua command within 30 s", true)', body)
 
     def test_pump_protocol_uses_ready_and_sequence_matched_done_markers(self):
         self.assertIn('pcall(cprint, "[console] __f2 ready")', self.pump)
-        self.assertIn('pcall(cprint, "[console] __f2 done " .. seq)', self.pump)
+        self.assertIn('pcall(cprint, "[console] __f2 done " .. seq)', self.step)
         self.assertIn("if (body == \"__f2 ready\")", self.host)
         self.assertIn('body.rfind("__f2 done ", 0) == 0', self.host)
         self.assertIn("s.lua_done.store(std::strtoull", self.host)

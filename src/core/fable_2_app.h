@@ -34,7 +34,7 @@
 #include "fable2_fit_window.h"
 #include "fable2_keycap_swap.h"
 #include "fable2_patches.h"
-#include "keyboard_prompts.h"
+#include "prompt_textures.h"
 // #include "fable2_deadbeef_overlay.h"
 // 30fps-cap instrumentation (writes fps_probe.log next to the exe). Disabled
 // now that the cap is lifted via REX_VSYNC=0 (see tools/fable2-uncapped.cmd).
@@ -44,6 +44,8 @@
 #include "menu_items.h"
 // The console pad (f2 pad) uses the remote-pad driver in every build.
 #include "remote_gamepad_driver.h"
+#include "fable2_crash_log.h"  // host crash report (fable2_crash.log)
+#include "photo_mode_dialog.h"  // photo mode settings panel (ImGui)
 #ifdef FABLE2_REMOTE_CONTROL
 #include "remote_control_server.h"
 // 1-second game-state classifier (src/diagnostics/fable2_state_probe.h, single-TU inline).
@@ -103,6 +105,10 @@ class Fable2App : public rex::ReXApp {
                                                &remote_pad_enabled_};
 #endif  // FABLE2_REMOTE_CONTROL
 
+  // Photo mode settings panel (src/core/photo_mode_dialog.h). Created in
+  // OnCreateDialogs, released in OnShutdown (before the SDK drops the drawer).
+  std::unique_ptr<fable2::photomode::PhotoModeDialog> photo_dialog_;
+
   // Emulate the Xbox 360 Xenos GPU. Two plugins are staged next to the exe:
   //   rexgpu-xenos[d].dll        -> D3D12 (prebuilt SDK plugin; the default)
   //   rexgpu-xenos-vulkan[d].dll -> Vulkan (built from the SDK source via
@@ -147,17 +153,11 @@ class Fable2App : public rex::ReXApp {
       return system;  // C++14 unique_ptr<Derived> -> unique_ptr<Base>
     };
 
-    // Generate the keyboard keycap prompt textures (src/gui/keyboard_prompts.h)
-    // so the real-time prompt swap (src/core/fable2_keycap_swap.h) can show
-    // keycaps while the active input is keyboard/mouse and the original Xbox
-    // icons while a pad is in use. Runs here (OnPreSetup) because it needs both
-    // the config (loaded in OnPostInitLogging) and game_data_root (set in
-    // OnConfigurePaths), and it must run BEFORE OnPostLoadXexImage where the
-    // keycap swap module reads the sidecar. No sidecar is written (no-op) when
-    // there are no bound keys and no mouse look, so a normal launch is unchanged.
-    fable2::gui::GenerateSidecar(game_data_root(),
-                                 fable2::config::Get().keyboard_gamepad_map,
-                                 fable2::config::Get().mouse_look, "");
+    // Keyboard keycap prompts (src/gui/prompt_textures.h). Needs the config and
+    // game_data_root, and must rewrite the GUI banks before the game reads them.
+    fable2::keycap::Instance().SetTextures(fable2::gui::BuildPromptTextures(
+        game_data_root(), fable2::config::Get().keyboard_gamepad_map,
+        fable2::config::Get().mouse_look));
   }
 
   void OnPostSetup() override {
@@ -379,6 +379,26 @@ class Fable2App : public rex::ReXApp {
     const std::filesystem::path exe_dir =
         rex::filesystem::GetExecutableFolder();
     fable2::config::Load(exe_dir / "fable2_config.toml");
+    REXSYS_INFO("[photo-mode] {} (enabled={}, toggle key {})", fable2::photomode::kBuildTag,
+                fable2::config::Get().photo_mode_enabled,
+                fable2::config::Get().photo_mode_toggle_key);
+    {
+      // Controller shortcut (Guide by default), changeable from the menu.
+      namespace pm = fable2::photomode;
+      const std::string& combo = fable2::config::Get().photo_mode_gamepad_toggle;
+      uint16_t mask = pm::kPadGuide;
+      if (!pm::ParsePadCombo(combo, mask)) {
+        REXSYS_WARN("[photo-mode] gamepad_toggle \"{}\" not understood; using Guide", combo);
+        mask = pm::kPadGuide;
+      }
+      pm::pad_toggle_mask().store(mask);
+      pm::pad_toggle_saver() = [](const std::string& c) { fable2::config::SavePhotoModeGamepadToggle(c); };
+      REXSYS_INFO("[photo-mode] controller shortcut: {}", pm::PadComboName(mask));
+    }
+    // Screenshots read the game's frame from the window's presenter. Query it
+    // when a screenshot is taken: the presenter does not exist yet here.
+    fable2::photomode::presenter_provider() =
+        [this]() -> rex::ui::Presenter* { return GetWindowPresenter(window()); };
 
     // Seed cvars from the config. Only when the cvar is still at its
     // compiled default (source kDefault), so higher-priority sources --
@@ -412,6 +432,14 @@ class Fable2App : public rex::ReXApp {
     seed_cvar("keyboard_gamepad_map", cfg.keyboard_gamepad_map);
     seed_cvar("mouse_look", cfg.mouse_look ? "true" : "false");
     seed_cvar("mouse_look_scale", std::to_string(cfg.mouse_look_scale));
+    seed_cvar("mouse_look_smoothing", cfg.mouse_look_smoothing ? "true" : "false");
+    seed_cvar("mouse_look_window_ms", std::to_string(cfg.mouse_look_window_ms));
+    seed_cvar("mouse_look_diag", cfg.mouse_look_diag ? "true" : "false");
+    seed_cvar("mouse_look_mode", cfg.mouse_look_mode);
+    seed_cvar("mouse_look_sens_x", std::to_string(cfg.mouse_look_sens_x));
+    seed_cvar("mouse_look_sens_y", std::to_string(cfg.mouse_look_sens_y));
+    seed_cvar("mouse_look_invert_y", cfg.mouse_look_invert_y ? "true" : "false");
+    seed_cvar("mouse_look_direct_smoothing", std::to_string(cfg.mouse_look_direct_smoothing));
     // NOTE: the hero/dog readback fix (readback_resolve_force_addresses) is a
     // GPU-PLUGIN cvar, so it is seeded in OnPostSetup() (after the plugin is
     // loaded) rather than here - see plans/hero-dog-texture-readback.md.
@@ -448,14 +476,17 @@ class Fable2App : public rex::ReXApp {
 #endif  // FABLE2_REMOTE_CONTROL
   }
 
-#ifdef FABLE2_REMOTE_CONTROL
-  // Stop the state classifier thread, then the remote control server threads,
-  // before anything else tears down.
   void OnShutdown() override {
+    // The panel unregisters itself from the ImGui drawer, which the SDK
+    // destroys right after this hook.
+    photo_dialog_.reset();
+#ifdef FABLE2_REMOTE_CONTROL
+    // Stop the state classifier thread, then the remote control server
+    // threads, before anything else tears down.
     fable2::stateprobe::stop();
     remote_server_.Stop();
-  }
 #endif  // FABLE2_REMOTE_CONTROL
+  }
   // Apply the game patches (see src/core/fable2_patches.h) once the SDK has
   // decrypted default.xex into the guest arena, before the module launches.
   // Each patch is switched on by a [patches] key in fable2_config.toml
@@ -468,11 +499,7 @@ class Fable2App : public rex::ReXApp {
     // Lets the direct-mouse-look hook (src/core/fable2_hooks.cpp) translate the
     // camera object's guest address to a host pointer.
     fable2::mouselook::set_memory(runtime()->memory());
-    // Real-time keycap prompt swap (src/core/fable2_keycap_swap.h). No-op unless
-    // the launcher wrote a keyboard-prompt sidecar; the prompt variant then
-    // follows the active input device (keyboard/mouse -> keycaps, pad ->
-    // controller icons).
-    fable2::keycap::Instance().Init(runtime()->memory(), game_data_root());
+    fable2::keycap::Instance().Init(runtime()->memory());
   }
 
   // Startup integrity check: this build was recompiled against a specific
@@ -488,6 +515,21 @@ class Fable2App : public rex::ReXApp {
     // this appends any file that is on disk but unlisted. Idempotent.
     fable2::manifestheal::EnsureComplete(game_data_root());
     fable2::console::set_root(game_data_root());
+    // Photo mode's pose cards run console lines (`pose`).
+    fable2::photomode::game_command() = [](const std::string& line) { fable2::console::enqueue_text(line); };
+    fable2::photomode::game_command_ready() = [] { return fable2::console::S().pump_ready.load(); };
+    fable2::photomode::world_thread_hook() = [](PPCContext& c, uint8_t* b) {
+      fable2::console::service_world_thread(c, b);
+    };
+    fable2::photomode::game_command_busy() = [] {
+      auto& c = fable2::console::S();
+      bool queued;
+      {
+        std::lock_guard<std::mutex> lock(c.qmu);
+        queued = !c.queue.empty();
+      }
+      return queued || c.lua_wait || !c.lua_pending.empty();
+    };
 
     // Resolve the host path the same way the SDK does (game:\ / d:\ ->
     // game_data_root). The SDK's path may use either slash direction
@@ -652,8 +694,54 @@ class Fable2App : public rex::ReXApp {
     return cache / "default.xex.sha256";
   }
 
+  // The game's own menu typeface (large / normal / small) for the photo mode
+  // menu, read from the user's game data (data/language/<lang>/fonts/*.bft).
+  void OnConfigureFonts(ImFontAtlas* atlas) override {
+    namespace gf = fable2::gamefont;
+    std::vector<std::filesystem::path> roots;
+    if (!game_data_root().empty()) roots.push_back(game_data_root());
+    roots.push_back(fable2::photomode::menu::PhotosFolder().parent_path());
+    for (int i = 0; i < gf::kSizeCount; ++i) {
+      bool ok = false;
+      for (const auto& root : roots) {
+        for (const char* lang : {"en-uk", "en-us", "en"}) {
+          const auto path = root / "data" / "language" / lang / "fonts" / gf::kSizeFile[i];
+          if (std::filesystem::exists(path) && gf::Load(path, i)) {
+            ok = true;
+            break;
+          }
+        }
+        if (ok) break;
+      }
+      if (!ok) REXSYS_WARN("[photo-mode] menu font {} not loaded ({})", gf::kSizeFile[i],
+                           gf::font(i).error.empty() ? "not found" : gf::font(i).error);
+    }
+    const int added = gf::AddAllToAtlas(atlas);
+    REXSYS_INFO("[photo-mode] menu fonts: {} of {} loaded (large {} / normal {} / small {} glyphs)", added,
+                int(gf::kSizeCount), gf::font(gf::kLarge).glyphs.size(), gf::font(gf::kNormal).glyphs.size(),
+                gf::font(gf::kSmall).glyphs.size());
+    // The game's controller button icons (data/art/gui/gui_textures.bnk).
+    namespace gi = fable2::gameicons;
+    int icons = 0;
+    std::string icon_log;
+    for (const auto& root : roots) {
+      icon_log.clear();
+      // The pose cards' expression icons come from the same bank.
+      std::vector<std::string> pose_icons;
+      for (const auto& pose : fable2::photomode::kPoses) pose_icons.push_back(pose.icon);
+      icons = gi::Load(root, icon_log, pose_icons);
+      if (icons > 0) break;
+    }
+    const int icons_added = gi::AddAllToAtlas(atlas);
+    REXSYS_INFO("[photo-mode] button icons: {} of {} from gui_textures.bnk ({} in atlas){}", icons,
+                int(gi::kIconCount), icons_added, icon_log);
+  }
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     // fable2::deadbeef_overlay::register_overlay(drawer);
+    photo_dialog_ = std::make_unique<fable2::photomode::PhotoModeDialog>(drawer);
+#ifdef _WIN32
+    fable2::crashlog::Install();  // again, after the SDK set up its own handlers
+#endif
   }
   // std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override;
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
