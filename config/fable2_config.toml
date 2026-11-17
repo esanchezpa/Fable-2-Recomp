@@ -306,10 +306,9 @@ texture_dump = false
 post_processing = true
 
 # Ambient Occlusion: soft contact shadows where surfaces meet (under rocks,
-# ruins and roofs, at tree roots), worked out from the game's depth buffer
-# over a radius of about two world units, so rocks and trunks sit on the
-# ground, and faded out with distance. Part of Post-Processing: only on when
-# that and Modern graphics are on. No measurable FPS cost. Default: true
+# ruins and roofs, between leaves), worked out from the game's depth buffer
+# and faded out with distance. Part of Post-Processing: only on when that and
+# Modern graphics are on. Costs about 2% FPS. Default: true
 ambient_occlusion = true
 
 # Sun Shadows: short, sharp sun shadows from rocks, roots, trunks and walls

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import unittest
 
-ROOT = Path(r"D:\Fable.2.Game.of.the.Year.Edition-P2P\Fable-2-Recomp")
+ROOT = Path(__file__).resolve().parents[2]
 HEADER = ROOT / "src" / "core" / "fable2_fit_window_ui.h"
 EV = Path(r"D:\QA-Storage\fable2-active\evidence\tracy-watchpoint-20261116")
 

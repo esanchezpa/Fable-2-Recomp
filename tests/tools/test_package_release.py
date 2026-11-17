@@ -41,6 +41,7 @@ class PackageReleaseTests(unittest.TestCase):
             self.build / "data/scripts/quests/quest.lua": "game script",
             self.build / "data/scripts/recomp/F5.lua": "recomp script",
             self.build / "shaders/replace/water.dxbc": "compiled shader",
+            self.root / "assets/fonts/OFL.txt": "font licence",
         }.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)

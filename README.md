@@ -639,3 +639,42 @@ way. Check before committing name changes:
 ```
 python tools/check_manifest_collisions.py
 ```
+
+# Credits & Acknowledgments
+
+This project stands on the work of many others. The recompilation itself is based on
+[himdo/Fable-2-Recomp](https://github.com/himdo/Fable-2-Recomp) (ReXGlue SDK v0.10.0) —
+without it none of this runs. The following forks, contributors and researchers shaped the
+final state of this repository (performance, QA, visual fixes and the launcher integration):
+
+## Forks whose code and research we integrated
+
+- **[gitgudscrub/Fable-2-Recomp](https://github.com/gitgudscrub/Fable-2-Recomp)** — Project Sparrow launcher (editions, themes, signed updates, texture-pack download), Modern Graphics SDK enhancements (real sun shadow maps, world-space AO, light shafts, post-grade), the efficient frame-limiter wait (`WaitOnAddress`/`WakeByAddressAll`), shader pre-build and the texture-pack system. This fork's launcher and visual work are the spine of the Sparrow integration.
+- **[itar3/Fable2RecompMac](https://github.com/itar3/Fable2RecompMac)** — Metal-port research that drove our graphic triage methodology: shader identity by content hash, alpha `GREATER` vs `GREATER_EQUAL`, guest-texel fetch offsets, small render-target coverage, render-target aliasing on reload, occlusion-query behaviour. Even where the defects did not reproduce in our D3D12 path, the *method* (capture the last valid draw, compare pipelines) is now part of our QA.
+- **[Locme/Fable-2-Recomp](https://github.com/Locme/Fable-2-Recomp)** — upstream PRs #57/#64/#65 (PR #64's wait-for-PSO fix is in our pinned SDK and empirically corroborated by our cold-area-entry run), plus the `native-zlib-memcpy` and `faster-loading` research that informed our hitch analysis.
+- **[mootank93/Fable-2-Recomp](https://github.com/mootank93/Fable-2-Recomp)** — `CustomD3D12Renderer` (format/untile/swizzle concepts only), the `Culling` Lua experiment (documented and gated), and the `Vulkan-Renderer-Testing` branch's pixel-read smoke-test methodology (draw calls alone are not proof).
+- **[andrew17182/Fable-2-Recomp-macOS](https://github.com/andrew17182/Fable-2-Recomp-macOS)** — reproducible input sequences and stencil/draw-trace diagnostics for visual QA at 2x/3x.
+- **[deadtools/-Fable-2-Recomp](https://github.com/deadtools/-Fable-2-Recomp)** — diagnostic report packaging format (config + XEX hash + logs + screenshot + steps).
+- **[Spaced1127/Fable-2-Recomp-nx](https://github.com/Spaced1127/Fable-2-Recomp-nx)** — barrier/MSAA and real pixel-read research for the Switch/deko3d port (methodology only, not D3D12 code).
+
+## Upstream contributors (himdo/Fable-2-Recomp)
+
+- **himdo** — the base project and the ReXGlue SDK fork that makes it all run.
+- **Locme** — upstream PRs #57, #64, #65 (renderer correctness and PSO handling).
+- **MOTHblank** and **ForbesGRyan** — graphics/rendering contributions already integrated upstream (PR #51 line).
+- **delta4o**, **Jack-Pettersson**, **BorisThoris** — keyboard/mouse prompts, direct mouse camera, morph-release zone-load fix (#188), photo mode, RunScript/world-thread gating, native test CI (#195/#196).
+- **Ad0ky**, **dirtydanisreal**, **Spaced1127** — forks audited for exclusive additions (none found beyond what is already upstream; documented so the work isn't duplicated).
+
+## Methodology & tooling that informed the campaign
+
+- **Brendan Gregg's flamegraph / profiling methodology** (referenced by the `flamegraphs` skill workflow used for hot-function analysis).
+- **RenderDoc 1.47** (portable, already installed) — used for D3D12 capture and diagnosis.
+- The **ReXGlue SDK** developers (`rexglue/rexglue-sdk`, fork `himdo/rexglue-sdk`) — the runtime and codegen that everything here depends on.
+
+## AI-assisted engineering
+
+This repository was developed with extensive AI assistance (OpenCode / GLM-5.3-Flash planning and review, GPT-6 Luna implementation, GLM-5.3 verification, and Claude Code for QA supervision). All findings were validated by measurement (A/B runs under a storage guard, hash-verified saves, RenderDoc captures) rather than by assertion.
+
+---
+
+*If you contributed and are missing from this list, please open an issue or PR against `esanchezpa/Fable-2-Recomp` and we will add you.*
