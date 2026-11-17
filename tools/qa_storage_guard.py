@@ -26,7 +26,8 @@ MIN_START_C = 30 * GIB
 MIN_START_D = 100 * GIB
 STOP_C = 20 * GIB
 STOP_D = 80 * GIB
-MAX_MANAGED_BYTES = 50 * GIB
+MAX_MANAGED_BYTES = 64 * GIB
+MAX_TRACE_BYTES = 50 * GIB
 MAX_TIMEOUT_SECONDS = 4 * 60 * 60
 POLL_SECONDS = 1
 MAX_LOG_BYTES = GIB
@@ -91,7 +92,7 @@ def check_capacity(c_free: int, d_free: int, managed_bytes: int,
         if d_free <= STOP_D:
             return f"D: free space reached the 80 GiB runtime stop threshold"
     if managed_bytes >= MAX_MANAGED_BYTES:
-        return f"Managed storage reached the 50 GiB budget"
+        return f"Managed storage reached the 64 GiB budget"
     return None
 
 
@@ -232,8 +233,8 @@ def run_guarded(argv: list[str], repo_root: Path | str, root: Path | str = MANAG
         monitored_trace = Path(trace_file).resolve(strict=False)
         if not _is_under(monitored_trace, managed) or monitored_trace.drive.lower() != "d:":
             raise GuardError("Trace output must resolve under the managed D: root")
-        if trace_max_bytes > MAX_MANAGED_BYTES:
-            raise GuardError("Trace size cap cannot exceed the managed-storage budget")
+        if trace_max_bytes > MAX_TRACE_BYTES:
+            raise GuardError("Trace size cap cannot exceed the 50 GiB trace budget")
         if monitored_trace.exists():
             raise GuardError(f"Refusing to overwrite existing trace: {monitored_trace}")
     if monitored_trace is not None:

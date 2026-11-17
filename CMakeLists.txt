@@ -111,6 +111,12 @@ target_include_directories(fable_2 PRIVATE
 # per-configuration variant: rexgpu-xenosd.dll for Debug, rexgpu-xenos.dll
 # for Release). Without it the game runs with no GPU emulation.
 rexglue_setup_target(fable_2 GPU_PLUGINS xenos)
+if(REXGLUE_ENABLE_TRACY AND REXSDK_DIR)
+    # In-tree SDK builds expose rex/ui headers that include ImGui directly;
+    # the installed SDK packages this include path in its public include tree.
+    target_include_directories(fable_2 SYSTEM PRIVATE
+        "${REXSDK_DIR}/thirdparty/imgui")
+endif()
 add_custom_command(TARGET fable_2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_BINARY_DIR}/fable2_build.json"

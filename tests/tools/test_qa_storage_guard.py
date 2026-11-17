@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -90,6 +91,40 @@ class StoragePolicyTests(unittest.TestCase):
         )
         self.assertIn("D:", result)
 
+    def test_managed_storage_budget_is_64_gibibytes(self):
+        self.assertEqual(guard.MAX_MANAGED_BYTES, 64 * guard.GIB)
+        self.assertIsNone(
+            guard.check_capacity(
+                c_free=guard.GIB * 100,
+                d_free=guard.GIB * 200,
+                managed_bytes=guard.MAX_MANAGED_BYTES - 1,
+                phase="start",
+            )
+        )
+        result = guard.check_capacity(
+            c_free=guard.GIB * 100,
+            d_free=guard.GIB * 200,
+            managed_bytes=guard.MAX_MANAGED_BYTES,
+            phase="start",
+        )
+        self.assertIn("64 GiB", result)
+
+    @unittest.skipUnless(os.name == "nt", "the managed storage policy requires Windows D:")
+    def test_managed_budget_increase_does_not_raise_trace_file_cap(self):
+        fixture_root = Path("D:/QA-Storage/guard-tests")
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_root) as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(guard.GuardError, "(?i)trace size cap"):
+                guard.run_guarded(
+                    [sys.executable, "-c", "pass"],
+                    repo_root=ROOT,
+                    root=root,
+                    timeout_seconds=1,
+                    trace_file=root / "trace.csv",
+                    trace_max_bytes=50 * guard.GIB + 1,
+                )
+
     def test_budget_is_rejected_at_or_above_cap(self):
         result = guard.check_capacity(
             c_free=guard.GIB * 100,
@@ -168,7 +203,14 @@ class StoragePolicyTests(unittest.TestCase):
                 record = json.loads(next((managed / "fable2-active" / "runs").glob("*/run.json")).read_text(encoding="utf-8"))
                 self.assertEqual(exit_code, 124)
                 self.assertTrue(record["termination_verified"])
-                self.assertFalse(guard._pid_is_alive(int(pid_file.read_text(encoding="utf-8"))))
+                descendant_pid = int(pid_file.read_text(encoding="utf-8"))
+                descendant_deadline = time.monotonic() + 5
+                while guard._pid_is_alive(descendant_pid) and time.monotonic() < descendant_deadline:
+                    time.sleep(0.05)
+                self.assertFalse(
+                    guard._pid_is_alive(descendant_pid),
+                    f"guard-owned descendant PID {descendant_pid} remained alive after termination",
+                )
             self.assertIsNone(unrelated.poll(), "an unrelated process must remain running")
         finally:
             unrelated.terminate()
