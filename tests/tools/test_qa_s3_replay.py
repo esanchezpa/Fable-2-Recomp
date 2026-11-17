@@ -78,7 +78,7 @@ class ReplayPlanTests(unittest.TestCase):
             self.assertEqual(summary["event_rows"], 2)
             self.assertEqual(summary["event_counts"], {"guest_output_produced": 2})
             self.assertEqual(summary["unique_nonzero_guest_output_ids_produced"], 2)
-            self.assertIn("not unique displayed frames", summary["interpretation_limit"])
+            self.assertIn("No content uniqueness", summary["interpretation_limit"])
 
     def test_trace_summary_rejects_nonpositive_qpc_frequency(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -91,6 +91,73 @@ class ReplayPlanTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 replay.summarize_trace(path, 1, 2)
+
+    def test_trace_summary_tracks_mailbox_ids_reuse_unobserved_outputs_intervals_and_gaps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "mailbox-trace.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                stream.write("# clock=qpc,frequency=1000\n")
+                writer = csv.writer(stream)
+                writer.writerow(["event", "event_sequence", "clock_ticks", "guest_output_id",
+                                 "mailbox_index", "swapchain_present_count", "result"])
+                # Output 1 is replaced before acquisition; output 2 is consumed and
+                # presented repeatedly; output 4 is acquired but not presented; 5
+                # is a trailing output not observed by the consumer.
+                writer.writerow(["guest_output_produced", 1, 100, 1, 0, -1, 0])
+                writer.writerow(["guest_output_produced", 2, 110, 2, 1, -1, 0])
+                writer.writerow(["guest_output_acquired", 1, 120, 2, 1, -1, 0])
+                writer.writerow(["dxgi_present_attempt", 1, 130, 2, 1, 7, 0])
+                writer.writerow(["guest_output_acquired", 2, 140, 2, 1, -1, 0])
+                writer.writerow(["dxgi_present_attempt", 2, 150, 2, 1, 8, 0])
+                writer.writerow(["guest_output_produced", 4, 200, 4, 2, -1, 0])
+                writer.writerow(["guest_output_acquired", 4, 210, 4, 2, -1, 0])
+                writer.writerow(["guest_output_produced", 5, 250, 5, 0, -1, 0])
+
+            summary = replay.summarize_trace(path, 100, 250)
+
+            self.assertEqual(summary["output_production_events"], 4)
+            self.assertEqual(summary["distinct_output_ids_produced"], 4)
+            self.assertEqual(summary["output_acquisition_events"], 3)
+            self.assertEqual(summary["distinct_output_ids_acquired"], 2)
+            self.assertEqual(summary["present_attempts"], 2)
+            self.assertEqual(summary["distinct_output_ids_in_present_attempts"], 1)
+            self.assertEqual(summary["production_id_reuse_events"], 0)
+            self.assertEqual(summary["acquisition_reuse_events"], 1)
+            self.assertEqual(summary["present_reuse_events"], 1)
+            self.assertEqual(summary["produced_ids_not_acquired_in_window"], 2)
+            self.assertEqual(summary["acquired_ids_not_presented_in_window"], 1)
+            self.assertEqual(summary["sequence_missing_rows_by_event"], {
+                "guest_output_acquired": 1,
+                "guest_output_produced": 1,
+            })
+            self.assertEqual(summary["intervals_seconds"]["guest_output_produced"]["max"], 0.09)
+            self.assertEqual(summary["intervals_seconds"]["guest_output_acquired"]["mean"], 0.045)
+            self.assertFalse(summary["claims_unique_guest_frames"])
+            self.assertFalse(summary["claims_scanout"])
+
+    def test_trace_summary_rejects_files_and_row_counts_over_bounded_limits(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "bounded-trace.csv"
+            path.write_text(
+                "# clock=qpc,frequency=1000\n"
+                "event,event_sequence,clock_ticks,guest_output_id,mailbox_index,swapchain_present_count,result\n"
+                "guest_output_produced,1,100,1,0,-1,0\n"
+                "guest_output_produced,2,110,2,1,-1,0\n",
+                encoding="utf-8",
+            )
+            original_bytes = replay.MAX_TRACE_BYTES
+            original_rows = replay.MAX_TRACE_ROWS
+            try:
+                replay.MAX_TRACE_BYTES = path.stat().st_size - 1
+                with self.assertRaisesRegex(ValueError, "byte limit"):
+                    replay.summarize_trace(path, 0, 200)
+                replay.MAX_TRACE_BYTES = original_bytes
+                replay.MAX_TRACE_ROWS = 1
+                with self.assertRaisesRegex(ValueError, "row limit"):
+                    replay.summarize_trace(path, 0, 200)
+            finally:
+                replay.MAX_TRACE_BYTES = original_bytes
+                replay.MAX_TRACE_ROWS = original_rows
 
 
 if __name__ == "__main__":

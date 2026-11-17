@@ -24,6 +24,8 @@ _PATTERN = (
     ("camera_sweep", ("mouse_delta", 500, 0), 0.1),
 )
 _MARKER_OWNER = "qa-s3-replay-v1"
+MAX_TRACE_BYTES = 32 * 1024 * 1024
+MAX_TRACE_ROWS = 250_000
 
 
 def build_replay_plan(duration_seconds: float = MIN_PASS_SECONDS) -> dict[str, object]:
@@ -169,14 +171,38 @@ def append_qpc_marker(path: Path | str, name: str, *, qpc: int, frequency: int,
 
 
 def summarize_trace(path: Path | str, start_qpc: int, end_qpc: int) -> dict[str, object]:
-    """Count real instrumented events in a QPC window; never label them FPS."""
+    """Summarize mailbox event flow in a QPC window without claiming displayed FPS."""
     if start_qpc < 0 or end_qpc <= start_qpc:
         raise ValueError("trace window must have an increasing, non-negative QPC range")
+    trace_path = Path(path)
+    try:
+        trace_size = trace_path.stat().st_size
+    except OSError as exc:
+        raise ValueError(f"cannot stat frame-event trace: {exc}") from exc
+    if trace_size > MAX_TRACE_BYTES:
+        raise ValueError(f"frame-event trace exceeds byte limit ({MAX_TRACE_BYTES})")
+
     event_counts: dict[str, int] = {}
-    unique_produced_ids: set[str] = set()
-    frequency: int | None = None
+    state_produced, state_acquired, state_present = 1, 2, 4
+    relevant_events = {
+        "guest_output_produced": state_produced,
+        "guest_output_acquired": state_acquired,
+        "dxgi_present_attempt": state_present,
+    }
+    # One bitmask per nonzero output ID. File and row caps bound this map.
+    output_states: dict[str, int] = {}
+    last_sequence: dict[str, int] = {}
+    sequence_gap_count: dict[str, int] = {}
+    sequence_missing_rows: dict[str, int] = {}
+    previous_ticks: dict[str, int] = {}
+    interval_stats: dict[str, dict[str, int]] = {}
+    reuse_events = {event: 0 for event in relevant_events}
+    consecutive_reuse_events = dict(reuse_events)
+    last_output_id = {event: "" for event in relevant_events}
     rows_in_window = 0
-    with Path(path).open("r", encoding="utf-8-sig", newline="") as stream:
+    rows_read = 0
+    present_nonzero_results = 0
+    with trace_path.open("r", encoding="utf-8-sig", newline="") as stream:
         first_line = stream.readline().strip()
         match = re.fullmatch(r"# clock=qpc,frequency=(\d+)", first_line)
         if not match:
@@ -185,18 +211,86 @@ def summarize_trace(path: Path | str, start_qpc: int, end_qpc: int) -> dict[str,
         if frequency <= 0:
             raise ValueError("trace QPC frequency must be positive")
         reader = csv.DictReader(stream)
-        required = {"event", "clock_ticks", "guest_output_id", "result"}
+        required = {"event", "event_sequence", "clock_ticks", "guest_output_id", "result"}
         if not required.issubset(reader.fieldnames or set()):
             raise ValueError("trace header does not contain required event/QPC fields")
         for row in reader:
-            ticks = int(row["clock_ticks"])
+            rows_read += 1
+            if rows_read > MAX_TRACE_ROWS:
+                raise ValueError(f"frame-event trace exceeds row limit ({MAX_TRACE_ROWS})")
+            try:
+                event = row["event"]
+                sequence = int(row["event_sequence"])
+                ticks = int(row["clock_ticks"])
+                output_id = row["guest_output_id"]
+                result = int(row["result"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"invalid frame-event row {rows_read + 2}") from exc
+            if (
+                not event
+                or sequence <= 0
+                or ticks < 0
+                or not isinstance(output_id, str)
+                or len(output_id) > 20
+                or not output_id.isdecimal()
+            ):
+                raise ValueError(f"invalid frame-event row {rows_read + 2}")
             if not start_qpc <= ticks <= end_qpc:
                 continue
+
             rows_in_window += 1
-            event = row["event"]
             event_counts[event] = event_counts.get(event, 0) + 1
-            if event == "guest_output_produced" and row["guest_output_id"] not in {"", "0"}:
-                unique_produced_ids.add(row["guest_output_id"])
+            previous_sequence = last_sequence.get(event)
+            if previous_sequence is not None:
+                if sequence > previous_sequence + 1:
+                    sequence_gap_count[event] = sequence_gap_count.get(event, 0) + 1
+                    sequence_missing_rows[event] = (
+                        sequence_missing_rows.get(event, 0) + sequence - previous_sequence - 1
+                    )
+                elif sequence <= previous_sequence:
+                    raise ValueError(f"non-increasing event sequence for {event}")
+            last_sequence[event] = sequence
+
+            previous = previous_ticks.get(event)
+            if previous is not None:
+                delta_ticks = ticks - previous
+                if delta_ticks <= 0:
+                    raise ValueError(f"non-increasing QPC timestamp for {event}")
+                stats = interval_stats.setdefault(
+                    event, {"samples": 0, "min_ticks": delta_ticks,
+                            "max_ticks": delta_ticks, "sum_ticks": 0}
+                )
+                stats["samples"] += 1
+                stats["min_ticks"] = min(stats["min_ticks"], delta_ticks)
+                stats["max_ticks"] = max(stats["max_ticks"], delta_ticks)
+                stats["sum_ticks"] += delta_ticks
+            previous_ticks[event] = ticks
+
+            state_flag = relevant_events.get(event)
+            if event == "dxgi_present_attempt" and result != 0:
+                present_nonzero_results += 1
+            if state_flag is None or output_id == "0":
+                continue
+            state = output_states.get(output_id, 0)
+            output_states[output_id] = state | state_flag
+            if state & state_flag:
+                reuse_events[event] += 1
+            if last_output_id[event] == output_id:
+                consecutive_reuse_events[event] += 1
+            last_output_id[event] = output_id
+
+    produced_ids = sum(bool(state & state_produced) for state in output_states.values())
+    acquired_ids = sum(bool(state & state_acquired) for state in output_states.values())
+    presented_ids = sum(bool(state & state_present) for state in output_states.values())
+    intervals_seconds = {
+        event: {
+            "samples": stats["samples"],
+            "min": round(stats["min_ticks"] / frequency, 9),
+            "max": round(stats["max_ticks"] / frequency, 9),
+            "mean": round(stats["sum_ticks"] / stats["samples"] / frequency, 9),
+        }
+        for event, stats in sorted(interval_stats.items())
+    }
     return {
         "trace": str(path),
         "clock": "qpc",
@@ -204,10 +298,51 @@ def summarize_trace(path: Path | str, start_qpc: int, end_qpc: int) -> dict[str,
         "start_qpc": start_qpc,
         "end_qpc": end_qpc,
         "duration_seconds": (end_qpc - start_qpc) / frequency,
+        "trace_bytes": trace_size,
+        "rows_read": rows_read,
         "event_rows": rows_in_window,
         "event_counts": dict(sorted(event_counts.items())),
-        "unique_nonzero_guest_output_ids_produced": len(unique_produced_ids),
-        "interpretation_limit": "Event counts and produced IDs only; not unique displayed frames or effective FPS.",
+        "output_production_events": event_counts.get("guest_output_produced", 0),
+        "output_acquisition_events": event_counts.get("guest_output_acquired", 0),
+        "present_attempts": event_counts.get("dxgi_present_attempt", 0),
+        "distinct_output_ids_produced": produced_ids,
+        "distinct_output_ids_acquired": acquired_ids,
+        "distinct_output_ids_in_present_attempts": presented_ids,
+        "unique_nonzero_guest_output_ids_produced": produced_ids,
+        "production_id_reuse_events": reuse_events["guest_output_produced"],
+        "acquisition_reuse_events": reuse_events["guest_output_acquired"],
+        "present_reuse_events": reuse_events["dxgi_present_attempt"],
+        "consecutive_production_id_reuse_events": consecutive_reuse_events["guest_output_produced"],
+        "consecutive_acquisition_reuse_events": consecutive_reuse_events["guest_output_acquired"],
+        "consecutive_present_reuse_events": consecutive_reuse_events["dxgi_present_attempt"],
+        "produced_ids_not_acquired_in_window": sum(
+            bool(state & state_produced) and not bool(state & state_acquired)
+            for state in output_states.values()
+        ),
+        "acquired_ids_not_presented_in_window": sum(
+            bool(state & state_acquired) and not bool(state & state_present)
+            for state in output_states.values()
+        ),
+        "acquired_ids_without_production_in_window": sum(
+            bool(state & state_acquired) and not bool(state & state_produced)
+            for state in output_states.values()
+        ),
+        "present_ids_without_acquisition_in_window": sum(
+            bool(state & state_present) and not bool(state & state_acquired)
+            for state in output_states.values()
+        ),
+        "present_attempts_with_nonzero_result": present_nonzero_results,
+        "sequence_gap_count_by_event": dict(sorted(sequence_gap_count.items())),
+        "sequence_missing_rows_by_event": dict(sorted(sequence_missing_rows.items())),
+        "intervals_seconds": intervals_seconds,
+        "claims_unique_guest_frames": False,
+        "claims_scanout": False,
+        "interpretation_limit": (
+            "IDs correlate output-production events through mailbox acquisition and host "
+            "Present attempts only. Unobserved IDs and sequence gaps are window-local; "
+            "they do not prove mailbox drops or ETW/display loss. No content uniqueness, "
+            "display completion, scanout cadence, or guest FPS is inferred."
+        ),
     }
 
 
