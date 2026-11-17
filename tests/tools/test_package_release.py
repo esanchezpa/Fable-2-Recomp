@@ -59,7 +59,7 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertEqual(names, {f"Fable 2 1.6.0/{name}" for name in (
             "fable_2.exe", "rexruntime.dll", "rexgpu-xenos.dll", "fable2_build.json", "Fable2Launcher.exe",
             "README.md", "fable2_config.toml", "shader_prebuild.txt", "shaders/replace/water.dxbc",
-            "data/scripts/recomp/F5.lua")})
+            "assets/fonts/OFL.txt", "data/scripts/recomp/F5.lua")})
         self.assertEqual(config, "repo config")
         self.assertEqual(readme, "player readme")
         self.assertEqual(build_info, {"profiles": ["goty"], "version": "1.6.0"})
@@ -143,6 +143,7 @@ class VelopackPackagingTests(PackageReleaseTests):
         self.assertEqual(set(staged), {"fable_2.exe", "rexruntime.dll", "rexgpu-xenos.dll", "fable2_build.json",
                                        "Fable2Launcher.exe", "README.md", "fable2_config.toml", "shader_prebuild.txt",
                                        "shaders/replace/water.dxbc",
+                                       "assets/fonts/OFL.txt",
                                        "data/scripts/recomp/F5.lua"})
         self.assertEqual(json.loads((stage / "fable2_build.json").read_text())["version"], "1.8.0")
         self.assertFalse((stage / "default.xex").exists())
